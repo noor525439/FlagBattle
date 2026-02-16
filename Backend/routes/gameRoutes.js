@@ -1,8 +1,18 @@
 import express from 'express';
 import { Country } from '../models/Country.js';
+import path from 'path'; 
+import { fileURLToPath } from 'url';
 
 const router = express.Router();
 
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+
+router.get('/controller-panel', (req, res) => {
+    res.sendFile(path.join(__dirname, '../public', 'controller.html'));
+});
 router.get('/countries', async (req, res) => {
     try {
         const countries = await Country.find({ status: 'active' });

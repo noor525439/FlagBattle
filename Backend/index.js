@@ -10,7 +10,6 @@ import enLocale from 'i18n-iso-countries/langs/en.json' with { type: 'json' };
 
 countries.registerLocale(enLocale);
 dotenv.config();
-
 const app = express();
 // CORS update: Add your netlify link here
 app.use(cors({
@@ -18,6 +17,7 @@ app.use(cors({
     credentials: true
 }));
 app.use(express.json());
+app.use(express.static('public'));
 
 // --- Global Variables ---
 const API_KEY = process.env.YOUTUBE_API_KEY;
@@ -100,36 +100,40 @@ const syncChatVotes = async () => {
             const username = item.authorDetails.displayName;
             const profilePic = item.authorDetails.profileImageUrl;
             const channelId = item.authorDetails.channelId;
-            const text = item.snippet.displayMessage;
+            const text = item.snippet.displayMessage.toLowerCase();
 
-            // Step 1: Detect if comment has a country name to assign flag
-            let detectedCountry = "Pakistan"; // Default
-            gameState.candidates.forEach(c => {
-                if (text.toLowerCase().includes(c.toLowerCase())) detectedCountry = c;
+            // Step 1: Detect country (Don't use a default string like "null;")
+            let detectedCountry = null;
+            
+            // Check against candidates or use a common list
+            // Agar candidates khali hain, toh aap common countries check kar sakte hain
+            const countryList = gameState.candidates.length > 0 ? gameState.candidates : ["Pakistan", "India", "USA", "Brazil", "Argentina", "Morocco"];
+
+            countryList.forEach(c => {
+                if (text.includes(c.toLowerCase())) {
+                    detectedCountry = c;
+                }
             });
 
-            // Step 2: Create/Update Snake
-            io.emit('newComment', {
-                userId: channelId,
-                username: username,
-                profilePic: profilePic,
-                countryCode: getCountryCode(detectedCountry),
-                count: 1
-            });
-
-            // Step 3: Handle Voting Logic
-            if (gameState.isRoundActive) {
-                gameState.candidates.forEach(countryName => {
-                    if (text.toLowerCase().includes(countryName.toLowerCase())) {
-                        gameState.votes[countryName] = (gameState.votes[countryName] || 0) + 1;
-                    }
+            // Step 2: Only emit if a country was actually found
+            if (detectedCountry) {
+                io.emit('newComment', {
+                    userId: channelId,
+                    username: username,
+                    profilePic: profilePic,
+                    countryCode: getCountryCode(detectedCountry),
+                    count: 1
                 });
+            }
+
+            // Step 3: Handle Voting Logic (Existing)
+            if (gameState.isRoundActive && detectedCountry) {
+                 gameState.votes[detectedCountry] = (gameState.votes[detectedCountry] || 0) + 1;
             }
 
             processedMessageIds.add(item.id);
         });
 
-        // Memory Management
         if (processedMessageIds.size > 500) {
             processedMessageIds = new Set(Array.from(processedMessageIds).slice(-200));
         }

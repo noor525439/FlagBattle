@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flag Battle | Admin Controller</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f172a; color: white; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .card { background: #1e293b; padding: 2rem; border-radius: 1rem; box-shadow: 0 10px 25px rgba(0,0,0,0.3); width: 100%; max-width: 400px; text-align: center; border: 1px solid #334155; }
+        h1 { font-size: 1.5rem; margin-bottom: 1.5rem; color: #38bdf8; }
+        input { width: 100%; padding: 12px; margin-bottom: 1rem; border-radius: 0.5rem; border: 1px solid #334155; background: #0f172a; color: white; box-sizing: border-box; font-size: 1rem; }
+        button { width: 100%; padding: 12px; border: none; border-radius: 0.5rem; background: #38bdf8; color: #0f172a; font-weight: bold; cursor: pointer; font-size: 1rem; transition: 0.3s; }
+        button:hover { background: #0ea5e9; transform: translateY(-2px); }
+        #status { margin-top: 1rem; font-size: 0.9rem; padding: 10px; border-radius: 0.5rem; display: none; }
+        .success { display: block !important; background: #065f46; color: #34d399; }
+        .error { display: block !important; background: #7f1d1d; color: #f87171; }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h1>🚀 Flag Battle Control</h1>
+        <p style="font-size: 0.8rem; color: #94a3b8; margin-bottom: 20px;">Paste YouTube Video ID to start the game</p>
+        
+        <input type="text" id="videoId" placeholder="Example: jW9f4vS-6_w">
+        <button onclick="updateGame()">Update Live Stream</button>
+        
+        <div id="status"></div>
+    </div>
+
+    <script>
+        async function updateGame() {
+            const vid = document.getElementById('videoId').value.trim();
+            const statusDiv = document.getElementById('status');
+            const btn = document.querySelector('button');
+
+            if(!vid) {
+                showStatus("Please enter a Video ID", "error");
+                return;
+            }
+
+            btn.innerText = "Connecting...";
+            btn.disabled = true;
+
+            try {
+               
+                const response = await fetch('https://flagbattle-mvv4.onrender.com/set-video', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ videoId: vid })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showStatus("✅ Connected! Game is now live.", "success");
+                } else {
+                    showStatus("❌ Error: " + data.error, "error");
+                }
+            } catch (err) {
+                showStatus("❌ Could not connect to server", "error");
+            } finally {
+                btn.innerText = "Update Live Stream";
+                btn.disabled = false;
+            }
+        }
+
+        function showStatus(msg, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerText = msg;
+            statusDiv.className = type;
+        }
+    </script>
+</body>
+</html>
