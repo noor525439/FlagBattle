@@ -7,7 +7,7 @@ import Leaderboard from "./Leaderboard";
 import EndScreen from "./EndScreen";
 
 // --- YAHAN APNA RENDER KA URL DALEN ---
-const SOCKET_URL = "https://your-backend-name.onrender.com"; 
+const SOCKET_URL = "https://flagbattle-mvv4.onrender.com"; 
 const socket = io(SOCKET_URL, {
   transports: ["websocket"],
   withCredentials: true
