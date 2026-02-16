@@ -32,10 +32,10 @@
 
     <div class="card">
         <h1>🚀 Flag Battle Control</h1>
-        <p class="subtitle">Apni YouTube Live Stream ko game se connect karein.</p>
+        <p class="subtitle">Connect your YouTube Live Stream to the game.</p>
         
         <div class="instruction-box">
-            <p>YouTube URL se <b>v=</b> ke baad wala hissa yahan dalein:</p>
+            <p>Paste the part of the YouTube URL after <b>v=</b> here:</p>
             <span class="code-example">watch?v=<u>jW9f4vS-6_w</u></span>
         </div>
 
@@ -69,7 +69,7 @@
             btn.disabled = true;
 
             try {
-                // Aapka Render Backend URL
+                // Your Render Backend URL
                 const response = await fetch('https://flagbattle-mvv4.onrender.com/set-video', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -85,7 +85,7 @@
                     showStatus("❌ Error: " + (data.error || "Invalid Video ID"), "error");
                 }
             } catch (err) {
-                showStatus("❌ Connection Failed. Make sure Backend is awake!", "error");
+                showStatus("❌ Connection Failed. Ensure the Backend is active!", "error");
             } finally {
                 btn.innerText = "Connect Live Stream";
                 btn.disabled = false;
