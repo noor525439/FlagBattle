@@ -23,6 +23,7 @@ function Mode2() {
 
   const getFlagUrl = (code) => `https://flagcdn.com/w160/${code.toLowerCase()}.png`;
 
+  // --- SOUND LOGIC ---
   const playPopSound = () => {
     if (isMuted) return;
     try {
