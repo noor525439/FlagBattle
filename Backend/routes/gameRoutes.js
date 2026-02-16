@@ -11,7 +11,15 @@ const __dirname = path.dirname(__filename);
 
 
 router.get('/controller-panel', (req, res) => {
-    res.sendFile(path.join(__dirname, '../public', 'controller.html'));
+    // path.resolve use karne se path zyada accurate nikalta hai
+    const filePath = path.resolve(__dirname, '..', 'public', 'controller.html');
+    
+    res.sendFile(filePath, (err) => {
+        if (err) {
+            console.error("File error path:", filePath); // Render logs mein check karein ye path kya dikha raha hai
+            res.status(404).send("Controller file nahi mil rahi. Path check karein.");
+        }
+    });
 });
 router.get('/countries', async (req, res) => {
     try {
