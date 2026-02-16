@@ -14,7 +14,7 @@ dotenv.config();
 const app = express();
 // CORS update: Add your netlify link here
 app.use(cors({
-    origin: ["http://localhost:5173", "https://flags-battle.netlify.app"],
+    origin: ["http://localhost:5173", "https://snake-flag-battle.netlify.app"],
     credentials: true
 }));
 app.use(express.json());

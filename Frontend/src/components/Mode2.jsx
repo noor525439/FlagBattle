@@ -1,35 +1,33 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { io } from "socket.io-client";
-import { RotateCcw, Volume2, VolumeX, LogOut, X, MoreVertical, Globe } from "lucide-react";
+import { RotateCcw, Volume2, VolumeX, LogOut, MoreVertical } from "lucide-react";
 import BattleArena from "./BattleArena";
 import Leaderboard from "./Leaderboard";
 import EndScreen from "./EndScreen";
 
-// --- YAHAN APNA RENDER KA URL DALEN ---
-const SOCKET_URL = "https://flagbattle-mvv4.onrender.com"; 
-const socket = io(SOCKET_URL, {
-  transports: ["websocket"],
-  withCredentials: true
-});
+// --- RENDER URL ---
+const SOCKET_URL = "https://flagbattle-mvv4.onrender.com";
 
 function Mode2() {
   const [snakes, setSnakes] = useState({});
-  const [timer, setTimer] = useState(60); // Live stream ke liye 60s behtar hai
+  const [timer, setTimer] = useState(30);
   const [active, setActive] = useState(true);
   const [showMenu, setShowMenu] = useState(false);
   const [gameModel, setGameModel] = useState(null); 
   const [comments, setComments] = useState([]); 
   const [isMuted, setIsMuted] = useState(false); 
   
+  // FIXED: socketRef initialized properly
+  const socketRef = useRef(null); 
   const winnerAnnounced = useRef(false);
   const lastSnakeAlerted = useRef(false);
   const voiceTimeoutRef = useRef(null);
 
   const getFlagUrl = (code) => `https://flagcdn.com/w160/${code.toLowerCase()}.png`;
 
-  // --- SOUND & VOICE LOGIC ---
-  const playPopSound = () => {
+  // --- SOUND LOGIC ---
+  const playPopSound = useCallback(() => {
     if (isMuted) return;
     try {
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -45,29 +43,27 @@ function Mode2() {
       oscillator.start();
       oscillator.stop(audioCtx.currentTime + 0.1);
     } catch (e) { console.log("Audio error"); }
-  };
+  }, [isMuted]);
 
-  const speak = (text) => {
+  const speak = useCallback((text) => {
     if ('speechSynthesis' in window && !isMuted) {
       window.speechSynthesis.cancel(); 
       const utterance = new SpeechSynthesisUtterance(text);
       window.speechSynthesis.speak(utterance);
     }
-  };
+  }, [isMuted]);
 
   const triggerModel = useCallback((text, countryCode) => {
     setGameModel({ text, code: countryCode });
     speak(text);
     setTimeout(() => setGameModel(null), 3000);
-  }, [isMuted]);
+  }, [speak]);
 
-  // --- SOCKET DATA HANDLER ---
+  // --- DATA HANDLER ---
   const updateSnakeData = useCallback((data) => {
     if (!active) return;
     
     const commentId = Math.random();
-    
-    // UI par comment dikhane ke liye
     const newComment = { 
       id: commentId, 
       username: data.username,
@@ -79,34 +75,36 @@ function Mode2() {
     setComments(prev => [newComment, ...prev].slice(0, 4)); 
     setTimeout(() => setComments(prev => prev.filter(c => c.id !== commentId)), 4000);
 
-    // Arena mein snake add ya update karne ke liye
     setSnakes((prev) => {
-      const existing = prev[data.userId] || { count: 0 };
+      const existing = prev[data.username] || { count: 0 };
       return { 
         ...prev, 
-        [data.userId]: { ...data, count: existing.count + 1 } 
+        [data.username]: { ...data, count: existing.count + 1 } 
       };
     });
 
     playPopSound();
-  }, [active, isMuted]);
+  }, [active, playPopSound]);
 
-  // --- SOCKET LISTENERS ---
+  // --- SOCKET CONNECTION ---
   useEffect(() => {
-    socket.on("connect", () => console.log("✅ Connected to Live Server"));
+    socketRef.current = io(SOCKET_URL, {
+      transports: ["websocket"],
+      withCredentials: true
+    });
+
+    socketRef.current.on("connect", () => console.log("✅ Connected to Live Server"));
     
-    // YouTube se aane wala naya comment
-    socket.on("newComment", (data) => {
+    socketRef.current.on("newComment", (data) => {
       updateSnakeData(data);
     });
 
     return () => {
-      socket.off("newComment");
-      socket.off("connect");
+      if (socketRef.current) socketRef.current.disconnect();
     };
   }, [updateSnakeData]);
 
-  // --- GAME LOOP & TIMER ---
+  // --- GAME LOOP & ALERTS ---
   useEffect(() => {
     let countdown;
     if (active && timer > 0) {
@@ -117,104 +115,116 @@ function Mode2() {
       setActive(false);
       const finalSnakes = Object.values(snakes).sort((a, b) => (b.count || 0) - (a.count || 0));
       if (finalSnakes.length > 0 && !winnerAnnounced.current) {
-        speak(`The winner is ${finalSnakes[0].username} from ${finalSnakes[0].country || 'their country'}!`);
+        speak(`The winner is ${finalSnakes[0].username} from ${finalSnakes[0].country}!`);
         winnerAnnounced.current = true;
       }
     }
     return () => clearInterval(countdown);
-  }, [active, timer, snakes]);
+  }, [active, timer, snakes, speak]);
+
+  useEffect(() => {
+    if (!active) return;
+    if (timer === 25) triggerModel("Type your Country Name in the chat to spawn!", "un");
+    if (timer === 12) {
+      const topSnakes = Object.values(snakes).sort((a,b) => b.count - a.count);
+      if (topSnakes.length > 0) triggerModel(`Support your country ${topSnakes[0].country}!`, topSnakes[0].countryCode);
+    }
+  }, [timer, active, triggerModel, snakes]);
 
   const handleRestart = () => {
+    if (voiceTimeoutRef.current) clearTimeout(voiceTimeoutRef.current);
     setSnakes({});
-    setTimer(60);
+    setTimer(30);
     setActive(true);
     setComments([]);
     setShowMenu(false);
     winnerAnnounced.current = false;
-    socket.emit("restartGame"); // Backend ko batane ke liye
+    lastSnakeAlerted.current = false;
+    if (socketRef.current) socketRef.current.emit("restartGame");
   };
 
+  const handleExit = () => {
+    if(window.confirm("Do you want to exit the game?")) {
+        window.location.reload();
+    }
+  };
+
+  // --- AAPKI ORIGINAL UI START ---
   return (
-    <div className="flex h-screen items-center justify-center bg-zinc-900 overflow-hidden font-sans">
-      <div className="relative aspect-[9/16] h-[95vh] bg-black shadow-2xl overflow-hidden border-[8px] border-zinc-800 rounded-[3rem]">
-        
-        {/* Progress Bar (Timer) */}
-        {active && (
-          <div className="absolute top-0 left-0 w-full h-2 z-[60] bg-white/10">
-            <motion.div 
-              className="h-full bg-gradient-to-r from-cyan-400 to-blue-600" 
-              animate={{ width: `${(timer / 60) * 100}%` }} 
-              transition={{ duration: 1, ease: "linear" }}
-            />
-          </div>
-        )}
+    <div className="flex h-screen items-center justify-center bg-white overflow-hidden font-sans">
+      <div className="relative aspect-[9/16] h-[95vh] bg-white py-6 shadow-[0_0_50px_rgba(0,0,0,0.1)] overflow-hidden">
+        <div className="relative w-full h-full bg-[#050505] rounded-3xl overflow-hidden border-4 border-black">
+          {active && (
+            <>
+              <div className="absolute top-0 left-0 w-full h-1.5 bg-white/5 z-[60]">
+                <motion.div 
+                  className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" 
+                  animate={{ width: `${(timer / 30) * 100}%` }} 
+                  transition={{ duration: 1, ease: "linear" }}
+                />
+              </div>
 
-        {/* UI Controls */}
-        <div className="absolute top-8 left-6 right-6 z-[700] flex justify-between items-center">
-            <button onClick={() => setShowMenu(!showMenu)} className="p-2 bg-black/40 backdrop-blur-md rounded-full text-white">
-                <MoreVertical size={20} />
-            </button>
-            <div className="px-4 py-1 rounded-full bg-black/50 backdrop-blur-md border border-white/20">
-                <span className={`font-mono text-xl font-black ${timer <= 10 ? 'text-red-500 animate-pulse' : 'text-white'}`}>{timer}s</span>
-            </div>
-        </div>
-
-        {/* Menu Overlay */}
-        <AnimatePresence>
-          {showMenu && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/80 z-[800] flex items-center justify-center">
-                <div className="flex flex-col gap-4 w-64">
-                    <button onClick={handleRestart} className="flex items-center justify-center gap-3 bg-white text-black p-4 rounded-2xl font-bold"><RotateCcw size={20}/> RESTART</button>
-                    <button onClick={() => setIsMuted(!isMuted)} className="flex items-center justify-center gap-3 bg-zinc-800 text-white p-4 rounded-2xl font-bold">{isMuted ? <VolumeX/> : <Volume2/>} {isMuted ? "UNMUTE" : "MUTE"}</button>
-                    <button onClick={() => setShowMenu(false)} className="bg-red-500 text-white p-4 rounded-2xl font-bold">CLOSE</button>
+              <div className="absolute top-6 left-6 right-6 z-[700] flex justify-between items-start">
+                <div className="relative">
+                  <button onClick={() => setShowMenu(!showMenu)} className="p-2 opacity-30 text-gray-500 hover:text-white transition-all active:scale-90"> 🌎 </button>
+                  <AnimatePresence>
+                    {showMenu && (
+                      <motion.div initial={{ opacity: 0, y: -10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -10, scale: 0.95 }} className="absolute top-12 left-0 w-48 bg-[#0f0f0f] border border-white/10 rounded-2xl overflow-hidden shadow-2xl z-[800]">
+                        <button onClick={handleRestart} className="w-full px-4 py-3.5 flex items-center gap-3 text-white text-[11px] font-bold hover:bg-white/5 border-b border-white/5 transition-colors group">
+                          <RotateCcw size={16} className="text-indigo-400 group-hover:rotate-[-45deg] transition-transform" />
+                          <span className="tracking-widest">RESTART GAME</span>
+                        </button>
+                        <button onClick={() => setIsMuted(!isMuted)} className="w-full px-4 py-3.5 flex items-center gap-3 text-white text-[11px] font-bold hover:bg-white/5 border-b border-white/5 transition-colors">
+                          {isMuted ? <VolumeX size={16} className="text-red-400" /> : <Volume2 size={16} className="text-green-400" />}
+                          <span className="tracking-widest">{isMuted ? "UNMUTE AUDIO" : "MUTE AUDIO"}</span>
+                        </button>
+                        <button onClick={handleExit} className="w-full px-4 py-3.5 flex items-center gap-3 text-white text-[11px] font-bold hover:bg-white/5 transition-colors group">
+                          <LogOut size={16} className="group-hover:translate-x-1 text-red-500 transition-transform" />
+                          <span className="tracking-widest">EXIT ARENA</span>
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
-            </motion.div>
+                <div className="px-3 py-1.5 rounded-2xl border-2 border-white/10 bg-black/60 backdrop-blur-md">
+                  <span className={`font-mono text-xl font-black ${timer <= 10 ? 'text-red-500 animate-pulse' : 'text-indigo-400'}`}>{timer}s</span>
+                </div>
+              </div>
+            </>
           )}
-        </AnimatePresence>
 
-        {/* Live Chat Comments */}
-        <div className="absolute bottom-32 left-4 z-[400] flex flex-col gap-2 pointer-events-none">
-          <AnimatePresence>
-            {comments.map((comment) => (
-              <motion.div key={comment.id} initial={{ opacity: 0, x: -50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, scale: 0.5 }} className="flex items-center gap-3 bg-black/40 backdrop-blur-sm p-2 rounded-xl border border-white/10">
-                <img src={comment.profilePic} className="w-8 h-8 rounded-full border-2 border-cyan-400" alt="" />
-                <div>
-                    <p className="text-[10px] text-cyan-400 font-bold">@{comment.username}</p>
-                    <p className="text-white text-[12px] font-medium">{comment.text}</p>
-                </div>
-                <img src={getFlagUrl(comment.flag)} className="w-6 h-4 object-cover rounded-sm ml-auto" alt="" />
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </div>
-
-        {/* Battle Components */}
-        <Leaderboard snakes={snakes} />
-        <BattleArena snakes={snakes} setSnakes={setSnakes} active={active} onCollision={() => playPopSound()} />
-
-        {/* End Screen */}
-        {!active && (
-            <EndScreen 
-                winners={Object.values(snakes).sort((a,b) => b.count - a.count).slice(0,3)} 
-                onRestart={handleRestart} 
-            />
-        )}
-
-        {/* Announcements */}
-        <AnimatePresence>
-            {gameModel && (
-                <motion.div initial={{ y: 100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -100, opacity: 0 }} className="absolute top-1/3 inset-x-0 flex justify-center z-[1000] pointer-events-none">
-                    <div className="bg-gradient-to-b from-yellow-400 to-orange-600 p-[2px] rounded-2xl shadow-[0_0_30px_rgba(234,179,8,0.5)]">
-                        <div className="bg-zinc-900 px-8 py-4 rounded-2xl flex flex-col items-center">
-                            <span className="text-yellow-400 font-black tracking-tighter text-sm">BATTLE NOTICE</span>
-                            <img src={getFlagUrl(gameModel.code)} className="w-24 h-14 object-cover my-2 rounded-lg" alt="" />
-                            <p className="text-white font-bold text-center">{gameModel.text}</p>
-                        </div>
-                    </div>
+          <div className="absolute bottom-24 left-4 z-[400] flex flex-col gap-3 pointer-events-none">
+            <AnimatePresence mode="popLayout">
+              {comments.map((comment) => (
+                <motion.div key={comment.id} initial={{ opacity: 0, x: -30, scale: 0.8 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={{ opacity: 0, x: 20, transition: { duration: 0.2 } }} className="flex items-center gap-2 max-w-[280px]">
+                  <div className="relative">
+                    <img src={comment.profilePic} alt="" className="w-8 h-8 rounded-full border border-indigo-500 bg-slate-800 object-cover" />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-indigo-400 font-black text-[10px] leading-tight">@{comment.username.toLowerCase()}</span>
+                    <span className="text-white font-bold text-[11px] leading-tight line-clamp-1">{comment.text}</span>
+                  </div>
                 </motion.div>
-            )}
-        </AnimatePresence>
+              ))}
+            </AnimatePresence>
+          </div>
 
+          <AnimatePresence>
+            {gameModel && (
+              <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="absolute inset-0 z-[1000] flex items-center justify-center px-8 pointer-events-none">
+                <div className="bg-[#0a0f1e] rounded-[5px] border-[2px] border-[#f0b429] px-8 py-1 flex flex-col items-center shadow-[0_0_50px_rgba(240,180,41,0.3)]">
+                  <h2 className="text-white font-black text-lg mb-2">🚀 BATTLE ALERT</h2>
+                  <img src={getFlagUrl(gameModel.code || 'pk')} alt="" className="w-40 h-20 object-cover rounded-sm mb-4 shadow-lg" />
+                  <p className="text-[#f0b429] font-semibold text-center text-sm">{gameModel.text}</p>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <Leaderboard snakes={snakes} />
+          <BattleArena snakes={snakes} setSnakes={setSnakes} active={active} onCollision={playPopSound} />
+          {!active && <EndScreen winners={Object.values(snakes).sort((a,b)=>b.count-a.count).slice(0,3)} onRestart={handleRestart} />}
+        </div>
       </div>
     </div>
   );
