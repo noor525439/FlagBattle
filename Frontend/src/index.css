@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+@theme {
+  --color-gaming-red: #ff4d4d;
+  --color-gaming-neon: #00f2ff;
+  --aspect-vertical: 9 / 16;
+}
+
+@keyframes pulse-slow {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.6; }
+}
+.bg-animate {
+  animation: pulse-slow 4s infinite;
+}
