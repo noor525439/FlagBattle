@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { io } from "socket.io-client";
-import { RotateCcw, Volume2, VolumeX, LogOut, MoreVertical } from "lucide-react";
+import { RotateCcw, Volume2, VolumeX, LogOut } from "lucide-react";
 import BattleArena from "./BattleArena";
 import Leaderboard from "./Leaderboard";
 import EndScreen from "./EndScreen";
@@ -18,13 +18,11 @@ function Mode2() {
   const [comments, setComments] = useState([]); 
   const [isMuted, setIsMuted] = useState(false); 
   
-  // FIXED: socketRef initialized properly
   const socketRef = useRef(null); 
   const winnerAnnounced = useRef(false);
-  const lastSnakeAlerted = useRef(false);
   const voiceTimeoutRef = useRef(null);
 
-  const getFlagUrl = (code) => `https://flagcdn.com/w160/${code.toLowerCase()}.png`;
+  const getFlagUrl = (code) => `https://flagcdn.com/w160/${code?.toLowerCase() || 'pk'}.png`;
 
   // --- SOUND LOGIC ---
   const playPopSound = useCallback(() => {
@@ -59,7 +57,7 @@ function Mode2() {
     setTimeout(() => setGameModel(null), 3000);
   }, [speak]);
 
-  // --- DATA HANDLER ---
+  // --- UPDATED DATA HANDLER ---
   const updateSnakeData = useCallback((data) => {
     if (!active) return;
     
@@ -72,6 +70,7 @@ function Mode2() {
       profilePic: data.profilePic || `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.username}`
     };
 
+    // UI Updates
     setComments(prev => [newComment, ...prev].slice(0, 4)); 
     setTimeout(() => setComments(prev => prev.filter(c => c.id !== commentId)), 4000);
 
@@ -86,7 +85,7 @@ function Mode2() {
     playPopSound();
   }, [active, playPopSound]);
 
-  // --- SOCKET CONNECTION ---
+  // --- UPDATED SOCKET CONNECTION (BATCH SUPPORT) ---
   useEffect(() => {
     socketRef.current = io(SOCKET_URL, {
       transports: ["websocket"],
@@ -95,6 +94,14 @@ function Mode2() {
 
     socketRef.current.on("connect", () => console.log("✅ Connected to Live Server"));
     
+    // Naya Batch Listener: Ye performance boost dega
+    socketRef.current.on("newCommentsBatch", (batch) => {
+      if (Array.isArray(batch)) {
+        batch.forEach(data => updateSnakeData(data));
+      }
+    });
+
+    // Fallback for single comments
     socketRef.current.on("newComment", (data) => {
       updateSnakeData(data);
     });
@@ -104,7 +111,7 @@ function Mode2() {
     };
   }, [updateSnakeData]);
 
-  // --- GAME LOOP & ALERTS ---
+  // --- GAME LOOP & ALERTS (REMAINS SAME) ---
   useEffect(() => {
     let countdown;
     if (active && timer > 0) {
@@ -113,9 +120,9 @@ function Mode2() {
       }, 1000);
     } else if (timer <= 0 && active) {
       setActive(false);
-      const finalSnakes = Object.values(snakes).sort((a, b) => (b.count || 0) - (a.count || 0));
-      if (finalSnakes.length > 0 && !winnerAnnounced.current) {
-        speak(`The winner is ${finalSnakes[0].username} from ${finalSnakes[0].country}!`);
+      const sorted = Object.values(snakes).sort((a, b) => (b.count || 0) - (a.count || 0));
+      if (sorted.length > 0 && !winnerAnnounced.current) {
+        speak(`The winner is ${sorted[0].username} from ${sorted[0].countryCode}!`);
         winnerAnnounced.current = true;
       }
     }
@@ -126,8 +133,8 @@ function Mode2() {
     if (!active) return;
     if (timer === 25) triggerModel("Type your Country Name in the chat to spawn!", "un");
     if (timer === 12) {
-      const topSnakes = Object.values(snakes).sort((a,b) => b.count - a.count);
-      if (topSnakes.length > 0) triggerModel(`Support your country ${topSnakes[0].country}!`, topSnakes[0].countryCode);
+      const top = Object.values(snakes).sort((a,b) => b.count - a.count);
+      if (top.length > 0) triggerModel(`Support your country ${top[0].countryCode}!`, top[0].countryCode);
     }
   }, [timer, active, triggerModel, snakes]);
 
@@ -139,7 +146,6 @@ function Mode2() {
     setComments([]);
     setShowMenu(false);
     winnerAnnounced.current = false;
-    lastSnakeAlerted.current = false;
     if (socketRef.current) socketRef.current.emit("restartGame");
   };
 
@@ -149,7 +155,7 @@ function Mode2() {
     }
   };
 
-  // --- AAPKI ORIGINAL UI START ---
+  // --- UI RENDER (EXACTLY AS PROVIDED) ---
   return (
     <div className="flex h-screen items-center justify-center bg-white overflow-hidden font-sans">
       <div className="relative aspect-[9/16] h-[95vh] bg-white py-6 shadow-[0_0_50px_rgba(0,0,0,0.1)] overflow-hidden">
@@ -214,7 +220,7 @@ function Mode2() {
               <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="absolute inset-0 z-[1000] flex items-center justify-center px-8 pointer-events-none">
                 <div className="bg-[#0a0f1e] rounded-[5px] border-[2px] border-[#f0b429] px-8 py-1 flex flex-col items-center shadow-[0_0_50px_rgba(240,180,41,0.3)]">
                   <h2 className="text-white font-black text-lg mb-2">🚀 BATTLE ALERT</h2>
-                  <img src={getFlagUrl(gameModel.code || 'pk')} alt="" className="w-40 h-20 object-cover rounded-sm mb-4 shadow-lg" />
+                  <img src={getFlagUrl(gameModel.code)} alt="" className="w-40 h-20 object-cover rounded-sm mb-4 shadow-lg" />
                   <p className="text-[#f0b429] font-semibold text-center text-sm">{gameModel.text}</p>
                 </div>
               </motion.div>

@@ -10,160 +10,148 @@ import enLocale from 'i18n-iso-countries/langs/en.json' with { type: 'json' };
 
 countries.registerLocale(enLocale);
 dotenv.config();
+
 const app = express();
-// CORS update: Add your netlify link here
+const API_KEY = process.env.YOUTUBE_API_KEY;
+
+// --- Global Variables & Optimization Caches ---
+let activeChatId = null;
+let nextPageToken = null;
+let processedMessageIds = new Set();
+let countryCache = {}; // Fast lookup for country codes
+let countryRegex = null; // Optimized regex for name matching
+
+let gameState = {
+    isRoundActive: false,
+    candidates: ["Pakistan", "India", "USA", "Brazil", "Argentina", "Morocco"],
+    votes: {},
+    timer: 30,
+};
+
+// --- Middleware ---
 app.use(cors({
     origin: ["http://localhost:5173", "https://snake-flag-battle.netlify.app"],
     credentials: true
 }));
 app.use(express.json());
-app.use(express.static('public'));
 
-// --- Global Variables ---
-const API_KEY = process.env.YOUTUBE_API_KEY;
-let activeChatId = null;
-let processedMessageIds = new Set();
-let gameState = {
-    isRoundActive: false,
-    dangerZoneCountry: null,
-    candidates: [], 
-    votes: {},
-    timer: 30,
+// --- Helper: Optimized Country Code & Regex ---
+const updateCountryRegex = () => {
+    // Candidates list se ek fast regex pattern banana
+    const pattern = gameState.candidates.map(c => `\\b${c}\\b`).join('|');
+    countryRegex = new RegExp(pattern, 'i');
 };
+updateCountryRegex(); // Initialize first time
 
-// --- Helper: Country Code ---
-const getCountryCode = (name) => {
-    if (!name) return 'pk';
+const getCountryCodeFast = (name) => {
+    const lowName = name.toLowerCase();
+    if (countryCache[lowName]) return countryCache[lowName];
+
     let code = countries.getAlpha2Code(name, 'en');
     if (!code) {
-        const titleCaseName = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
-        code = countries.getAlpha2Code(titleCaseName, 'en');
+        const titleCase = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+        code = countries.getAlpha2Code(titleCase, 'en');
     }
-    return code ? code.toLowerCase() : 'pk'; 
+    const finalCode = code ? code.toLowerCase() : 'pk';
+    countryCache[lowName] = finalCode; // Cache it!
+    return finalCode;
 };
 
 // --- YouTube Logic ---
 const getActiveChatId = async (videoId) => {
     try {
         const res = await axios.get(`https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails&id=${videoId}&key=${API_KEY}`);
-        if (res.data.items[0]) {
+        if (res.data.items?.[0]) {
             activeChatId = res.data.items[0].liveStreamingDetails.activeLiveChatId;
-            console.log("SYSTEM: Connected to Live Chat ID:", activeChatId);
+            nextPageToken = null;
+            processedMessageIds.clear();
+            console.log("SYSTEM: Live Chat Connected:", activeChatId);
             return true;
         }
         return false;
     } catch (err) {
-        console.error("ERROR: YouTube API connection failed.");
+        console.error("ERROR: YouTube connection failed.");
         return false;
     }
 };
 
-// API Route to manually set Video ID without redeploying
 app.post('/set-video', async (req, res) => {
     const { videoId } = req.body;
-    if (!videoId) return res.status(400).json({ error: "Video ID is required" });
-    
+    if (!videoId) return res.status(400).json({ error: "Video ID missing" });
     const success = await getActiveChatId(videoId);
-    if (success) {
-        processedMessageIds.clear(); // Clear old messages
-        res.json({ message: "Chat ID updated successfully", chatId: activeChatId });
-    } else {
-        res.status(500).json({ error: "Failed to fetch Chat ID" });
-    }
+    success ? res.json({ message: "Updated", chatId: activeChatId }) : res.status(500).json({ error: "Failed" });
 });
 
-// --- Database Connection ---
-mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log("SYSTEM: Connected to MongoDB"))
-    .catch(err => console.error("ERROR: Database Connection Failed", err));
-
-const server = createServer(app);
-const io = new Server(server, {
-    cors: {
-        origin: ["http://localhost:5173", "https://flags-battle.netlify.app"],
-        methods: ["GET", "POST"],
-        credentials: true
-    }
-});
-
-// --- Core Logic: Syncing Chat ---
+// --- CORE LOGIC: Batch Processing Sync ---
 const syncChatVotes = async () => {
-    if (!activeChatId) return; 
-    
+    if (!activeChatId) return;
+
     try {
-        const res = await axios.get(`https://www.googleapis.com/youtube/v3/liveChat/messages?liveChatId=${activeChatId}&part=snippet,authorDetails&key=${API_KEY}`);
+        let url = `https://www.googleapis.com/youtube/v3/liveChat/messages?liveChatId=${activeChatId}&part=snippet,authorDetails&key=${API_KEY}&maxResults=200`;
+        if (nextPageToken) url += `&pageToken=${nextPageToken}`;
+
+        const res = await axios.get(url);
+        nextPageToken = res.data.nextPageToken;
         const messages = res.data.items || [];
+
+        if (messages.length === 0) return;
+
+        let commentBatch = []; // Saray comments ek saath bhejne ke liye
 
         messages.forEach(item => {
             if (processedMessageIds.has(item.id)) return;
 
-            const username = item.authorDetails.displayName;
-            const profilePic = item.authorDetails.profileImageUrl;
-            const channelId = item.authorDetails.channelId;
-            const text = item.snippet.displayMessage.toLowerCase();
+            const text = item.snippet.displayMessage;
+            const match = text.match(countryRegex); // Super fast matching
 
-            // Step 1: Detect country (Don't use a default string like "null;")
-            let detectedCountry = null;
-            
-            // Check against candidates or use a common list
-            // Agar candidates khali hain, toh aap common countries check kar sakte hain
-            const countryList = gameState.candidates.length > 0 ? gameState.candidates : ["Pakistan", "India", "USA", "Brazil", "Argentina", "Morocco"];
+            if (match) {
+                const detectedCountry = match[0];
+                const countryCode = getCountryCodeFast(detectedCountry);
 
-            countryList.forEach(c => {
-                if (text.includes(c.toLowerCase())) {
-                    detectedCountry = c;
-                }
-            });
-
-            // Step 2: Only emit if a country was actually found
-            if (detectedCountry) {
-                io.emit('newComment', {
-                    userId: channelId,
-                    username: username,
-                    profilePic: profilePic,
-                    countryCode: getCountryCode(detectedCountry),
+                const commentData = {
+                    userId: item.authorDetails.channelId,
+                    username: item.authorDetails.displayName,
+                    profilePic: item.authorDetails.profileImageUrl,
+                    countryCode: countryCode,
                     count: 1
-                });
-            }
+                };
 
-            // Step 3: Handle Voting Logic (Existing)
-            if (gameState.isRoundActive && detectedCountry) {
-                 gameState.votes[detectedCountry] = (gameState.votes[detectedCountry] || 0) + 1;
-            }
+                commentBatch.push(commentData);
 
+                if (gameState.isRoundActive) {
+                    // Proper casing ke liye lookup
+                    const originalName = gameState.candidates.find(c => c.toLowerCase() === detectedCountry.toLowerCase());
+                    gameState.votes[originalName] = (gameState.votes[originalName] || 0) + 1;
+                }
+            }
             processedMessageIds.add(item.id);
         });
 
-        if (processedMessageIds.size > 500) {
-            processedMessageIds = new Set(Array.from(processedMessageIds).slice(-200));
+        // Optimization: Ek hi baar batch emit karein
+        if (commentBatch.length > 0) {
+            io.emit('newCommentsBatch', commentBatch); 
         }
 
-        if (gameState.isRoundActive) io.emit('voteUpdate', gameState.votes);
+        if (gameState.isRoundActive && Object.keys(gameState.votes).length > 0) {
+            io.emit('voteUpdate', gameState.votes);
+        }
+
+        // Keep memory clean
+        if (processedMessageIds.size > 1000) {
+            processedMessageIds = new Set(Array.from(processedMessageIds).slice(-500));
+        }
 
     } catch (err) {
-        console.error("YOUTUBE_POLL_ERROR: Likely quota limit or invalid Chat ID");
+        console.error("YOUTUBE_POLL_ERROR:", err.message);
     }
 };
 
-// --- Socket Events ---
-io.on('connection', (socket) => {
-    console.log("Client Connected:", socket.id);
+// --- Server Setup ---
+const server = createServer(app);
+const io = new Server(server, { cors: { origin: "*" } });
 
-    socket.on("testSnake", (data) => {
-        const testData = {
-            username: data.username || "GuestPlayer",
-            countryCode: getCountryCode(data.country || "Pakistan"), 
-            profilePic: `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.username || 'default'}`,
-            count: 1
-        };
-        io.emit("newComment", testData);
-    });
+setInterval(syncChatVotes, 3000); // Token ke saath 3s is safe
 
-    socket.on('disconnect', () => console.log("Client Disconnected"));
-});
-
-// --- Intervals ---
-setInterval(syncChatVotes, 5000); // 5 seconds polling
 setInterval(() => {
     if (gameState.isRoundActive && gameState.timer > 0) {
         gameState.timer--;
@@ -172,10 +160,12 @@ setInterval(() => {
             gameState.isRoundActive = false;
             const winner = Object.keys(gameState.votes).reduce((a, b) => 
                 (gameState.votes[a] > gameState.votes[b]) ? a : b, gameState.candidates[0]);
-            io.emit('roundEnded', { winner, absorbed: gameState.dangerZoneCountry });
+            io.emit('roundEnded', { winner });
+            gameState.votes = {};
         }
     }
 }, 1000);
 
-const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => console.log(`🚀 SERVER RUNNING AT ${PORT}`));
+mongoose.connect(process.env.MONGO_URI).then(() => {
+    server.listen(process.env.PORT || 5000, () => console.log(`🚀 FAST SERVER RUNNING`));
+});
