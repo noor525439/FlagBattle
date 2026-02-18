@@ -277,11 +277,19 @@ const SnakePlayer = ({ data, snakeKey, onCollision, setSnakes, active }) => {
     </span>
   </div>
 
-  <img 
-    src={profilePic} 
-    className="w-10 h-10 rounded-full border-2 border-white shadow-xl object-cover bg-slate-800 relative z-50"
-    style={{ transform: `rotate(${-pos.angle}deg)` }}
-  />
+ <img 
+  src={profilePic} 
+  alt={data.username} 
+  onError={(e) => {
+
+    e.target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}`;
+  }}
+  className="w-10 h-10 rounded-full border-2 border-white shadow-xl object-cover bg-slate-800 relative z-[100]" // Z-index barha diya
+  style={{ 
+    transform: `rotate(${-pos.angle}deg)`,
+    display: 'block' 
+  }}
+/>
 </div>
 
   
