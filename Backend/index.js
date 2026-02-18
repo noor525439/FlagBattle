@@ -28,14 +28,16 @@ let processedMessageIds = new Set();
 let countryCache = {}; // Fast lookup for country codes
 let countryRegex = null; // Optimized regex for name matching
 
+// Poori duniya ki countries ke saare possible names (Short, Official, Aliases)
+const allCountryData = countries.getNames("en"); 
+const worldCandidates = Object.values(allCountryData);
+
 let gameState = {
     isRoundActive: true,
-    candidates: ["Pakistan", "India", "USA", "Brazil", "Argentina", "Morocco"],
+    candidates: worldCandidates, 
     votes: {},
     timer: 30,
 };
-
-// --- Middleware ---
 app.use(cors({
     origin: ["http://localhost:5173", "https://snake-flag-battle.netlify.app"],
     credentials: true
@@ -48,25 +50,41 @@ app.get('/', (req, res) => {
 });
 
 const updateCountryRegex = () => {
-    const pattern = gameState.candidates.map(c => `\\b${c}\\b`).join('|');
-    countryRegex = new RegExp(pattern, 'i');
+    // Saare mulkon ke names ko sort karein (lambe naam pehle) taaki sahi matching ho
+    const sortedCandidates = [...gameState.candidates].sort((a, b) => b.length - a.length);
+    
+    const pattern = sortedCandidates
+        .map(c => c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) 
+        .map(c => `\\b${c}\\b`)
+        .join('|');
+    
+    // Isme "US", "UK", "PK" bhi add kar dete hain automatically
+    const extraPattern = `|\\bPK\\b|\\bUS\\b|\\bUK\\b|\\bIN\\b|\\bUAE\\b`;
+    
+    countryRegex = new RegExp(`(${pattern}${extraPattern})`, 'i');
 };
 updateCountryRegex(); 
 
 const getCountryCodeFast = (name) => {
-    const lowName = name.toLowerCase();
+    const lowName = name.toLowerCase().trim();
     if (countryCache[lowName]) return countryCache[lowName];
 
+    // 1. Direct Search (e.g., "Pakistan")
     let code = countries.getAlpha2Code(name, 'en');
+
+    // 2. Automatic Fix: Agar direct na mile, to saari countries mein dhoondein
     if (!code) {
-        const titleCase = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
-        code = countries.getAlpha2Code(titleCase, 'en');
+        const allNames = countries.getNames("en");
+        code = Object.keys(allNames).find(key => 
+            allNames[key].toLowerCase() === lowName || 
+            key.toLowerCase() === lowName // Ye "US", "PK" jaise codes ko bhi handle kar lega
+        );
     }
-    const finalCode = code ? code.toLowerCase() : 'pk';
-    countryCache[lowName] = finalCode; // Cache it!
+
+    const finalCode = code ? code.toLowerCase() : 'pk'; // Default 'pk' agar kuch na mile
+    countryCache[lowName] = finalCode;
     return finalCode;
 };
-
 // --- YouTube Logic ---
 const getActiveChatId = async (videoId) => {
     try {
