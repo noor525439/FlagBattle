@@ -271,9 +271,7 @@ triggerModel(`Support your country ${fullName}!`, code);
               ))}
             </AnimatePresence>
           </div>
-          <button onClick={() => testSpawn("User_2", "us")} className="px-4 py-2 bg-blue-600 text-white text-[10px] font-bold rounded hover:bg-blue-500 transition-all">SPAWN USER 2 (US)</button>
-//         <button onClick={() => testSpawn("User_3", "tr")} className="px-4 py-2 bg-red-600 text-white text-[10px] font-bold rounded hover:bg-red-500 transition-all">SPAWN USER 3 (TR)</button>
-
+        
           <AnimatePresence>
             {gameModel && (
               <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="absolute inset-0 z-[1000] flex items-center justify-center px-8 pointer-events-none">
