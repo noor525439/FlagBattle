@@ -39,7 +39,7 @@ let gameState = {
     timer: 30,
 };
 app.use(cors({
-    origin: ["http://localhost:5173", "https://snake-flag-battle.netlify.app"],
+    origin: ["http://localhost:5173", "https://flag-battle-38g6.vercel.app"],
     credentials: true
 }));
 app.use(express.json());
