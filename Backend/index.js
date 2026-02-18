@@ -29,7 +29,7 @@ let countryCache = {}; // Fast lookup for country codes
 let countryRegex = null; // Optimized regex for name matching
 
 let gameState = {
-    isRoundActive: false,
+    isRoundActive: true,
     candidates: ["Pakistan", "India", "USA", "Brazil", "Argentina", "Morocco"],
     votes: {},
     timer: 30,
@@ -101,8 +101,13 @@ const syncChatVotes = async () => {
         if (nextPageToken) url += `&pageToken=${nextPageToken}`;
 
         const res = await axios.get(url);
+        
+        // --- YE LOGS ADD KAREIN ---
+        console.log(`🔄 Polling... Messages found: ${res.data.items?.length || 0}`);
+        
         nextPageToken = res.data.nextPageToken;
         const messages = res.data.items || [];
+        // --------------------------
 
         if (messages.length === 0) return;
 
@@ -112,6 +117,7 @@ const syncChatVotes = async () => {
             if (processedMessageIds.has(item.id)) return;
 
             const text = item.snippet.displayMessage;
+            console.log(`📩 Chat Message: ${text}`);
             const match = text.match(countryRegex); // Super fast matching
 
             if (match) {
