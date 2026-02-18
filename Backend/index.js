@@ -19,6 +19,19 @@ countries.registerLocale(enLocale);
 dotenv.config();
 
 const app = express();
+
+const server = createServer(app); 
+const io = new Server(server, {
+  cors: {
+    origin: ["http://localhost:5173", "https://flag-battle-38g6.vercel.app"],
+    methods: ["GET", "POST"],
+    credentials: true
+  },
+  transports: ["polling", "websocket"], 
+  pingTimeout: 60000, 
+  pingInterval: 25000
+});
+
 const API_KEY = process.env.YOUTUBE_API_KEY;
 
 
@@ -37,6 +50,9 @@ let gameState = {
     votes: {},
     timer: 30,
 };
+
+
+
 app.use(cors({
     origin: ["http://localhost:5173", "https://flag-battle-38g6.vercel.app"],
     credentials: true
@@ -216,8 +232,7 @@ const syncChatVotes = async () => {
 };
 
 
-const server = createServer(app);
-const io = new Server(server, { cors: { origin: "*" } });
+
 
 setInterval(syncChatVotes, 3000);
 
@@ -234,6 +249,25 @@ setInterval(() => {
         }
     }
 }, 1000);
+
+io.on("connection", (socket) => {
+    console.log("New Client Connected! ID:", socket.id);
+
+    socket.on("restartGame", () => {
+        console.log("SYSTEM: Restarting Game...");
+        gameState.timer = 30;
+        gameState.votes = {};
+        gameState.isRoundActive = true;
+        
+    
+        io.emit('timerUpdate', gameState.timer);
+        io.emit('voteUpdate', gameState.votes); 
+    });
+
+    socket.on("disconnect", () => {
+        console.log("Client disconnected:", socket.id);
+    });
+});
 
 mongoose.connect(process.env.MONGO_URI).then(() => {
     server.listen(process.env.PORT || 5000, () => console.log(`🚀 FAST SERVER RUNNING`));
