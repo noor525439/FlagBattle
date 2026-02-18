@@ -6,7 +6,7 @@ import BattleArena from "./BattleArena";
 import Leaderboard from "./Leaderboard";
 import EndScreen from "./EndScreen";
 
-// --- RENDER URL ---
+
 const SOCKET_URL = "https://flagbattle-mvv4.onrender.com";
 
 function Mode2() {
@@ -24,7 +24,7 @@ function Mode2() {
 
   const getFlagUrl = (code) => `https://flagcdn.com/w160/${code?.toLowerCase() || 'pk'}.png`;
 
-  // --- SOUND LOGIC ---
+
   const playPopSound = useCallback(() => {
     if (isMuted) return;
     try {
@@ -50,6 +50,14 @@ function Mode2() {
       window.speechSynthesis.speak(utterance);
     }
   }, [isMuted]);
+    const getFullCountryName = (code) => {
+  try {
+    const regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
+    return regionNames.of(code.toUpperCase());
+  } catch (e) {
+    return code.toUpperCase(); 
+  }
+};
 
   const triggerModel = useCallback((text, countryCode) => {
     setGameModel({ text, code: countryCode });
@@ -57,51 +65,83 @@ function Mode2() {
     setTimeout(() => setGameModel(null), 3000);
   }, [speak]);
 
-  // --- UPDATED DATA HANDLER ---
   const updateSnakeData = useCallback((data) => {
     if (!active) return;
     
-    const commentId = Math.random();
+    const countryCode = (data.countryCode || 'un').toLowerCase();
+    const userId = data.username; 
+    
+  
+    const snakeKey = userId; 
+
+    
+
+ const commentId = Math.random();
     const newComment = { 
       id: commentId, 
-      username: data.username,
-      text: "joined the battle!", 
-      flag: data.countryCode,
-      profilePic: data.profilePic || `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.username}`
+      username: userId,
+      text: data.message || `voted for ${getFullCountryName(countryCode)}!`,
+      flag: countryCode,
+      profilePic: data.profilePic || `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}`
     };
 
-    // UI Updates
     setComments(prev => [newComment, ...prev].slice(0, 4)); 
     setTimeout(() => setComments(prev => prev.filter(c => c.id !== commentId)), 4000);
 
     setSnakes((prev) => {
-      const existing = prev[data.username] || { count: 0 };
+      const existing = prev[snakeKey] || { count: 0 };
       return { 
         ...prev, 
-        [data.username]: { ...data, count: existing.count + 1 } 
+        [snakeKey]: { 
+          ...data, 
+          id: snakeKey,
+          countryCode: countryCode, 
+          count: existing.count + 1 
+        } 
       };
     });
 
     playPopSound();
   }, [active, playPopSound]);
 
-  // --- UPDATED SOCKET CONNECTION (BATCH SUPPORT) ---
-  useEffect(() => {
-    socketRef.current = io(SOCKET_URL, {
-      transports: ["websocket"],
-      withCredentials: true
+  const testSpawn = (user, code) => {
+    updateSnakeData({
+      username: user,
+      countryCode: code,
+      profilePic: `https://api.dicebear.com/7.x/avataaars/svg?seed=${user}`,
+      message: "Testing spawn!"
     });
+  };
 
-    socketRef.current.on("connect", () => console.log("✅ Connected to Live Server"));
-    
-    // Naya Batch Listener: Ye performance boost dega
+
+  useEffect(() => {
+   socketRef.current = io(SOCKET_URL, {
+    transports: ["polling", "websocket"], 
+    reconnection: true,                   
+    reconnectionAttempts: 5,              
+    reconnectionDelay: 2000,              
+    withCredentials: true
+  });
+
+  socketRef.current.on("connect", () => {
+    console.log("Connected to Server! ");
+  });
+
+  socketRef.current.on("connect_error", (err) => {
+    console.error("Connection Error: ", err.message);
+  });
+
     socketRef.current.on("newCommentsBatch", (batch) => {
       if (Array.isArray(batch)) {
-        batch.forEach(data => updateSnakeData(data));
+     
+        batch.forEach((data, index) => {
+          setTimeout(() => {
+            updateSnakeData(data);
+          }, index * 150);
+        });
       }
     });
 
-    // Fallback for single comments
     socketRef.current.on("newComment", (data) => {
       updateSnakeData(data);
     });
@@ -111,30 +151,47 @@ function Mode2() {
     };
   }, [updateSnakeData]);
 
-  // --- GAME LOOP & ALERTS (REMAINS SAME) ---
   useEffect(() => {
-    let countdown;
-    if (active && timer > 0) {
-      countdown = setInterval(() => {
-        setTimer((prev) => prev - 1);
-      }, 1000);
-    } else if (timer <= 0 && active) {
-      setActive(false);
-      const sorted = Object.values(snakes).sort((a, b) => (b.count || 0) - (a.count || 0));
-      if (sorted.length > 0 && !winnerAnnounced.current) {
-        speak(`The winner is ${sorted[0].username} from ${sorted[0].countryCode}!`);
-        winnerAnnounced.current = true;
-      }
-    }
-    return () => clearInterval(countdown);
-  }, [active, timer, snakes, speak]);
+  let countdown;
 
-  useEffect(() => {
+  if (active && timer > 0) {
+ 
+    countdown = setInterval(() => {
+      setTimer((prev) => prev - 1);
+    }, 1000);
+  } 
+
+  if (timer <= 0 && active) {
+    setActive(false);
+    
+ 
+    const allSnakes = Object.values(snakes);
+    if (allSnakes.length > 0 && !winnerAnnounced.current) {
+      const sorted = allSnakes.sort((a, b) => (b.count || 0) - (a.count || 0));
+      const winner = sorted[0];
+      const fullWinnerCountry = getFullCountryName(winner.countryCode);
+      
+      speak(`The winner is ${fullWinnerCountry}!`);
+      winnerAnnounced.current = true;
+    }
+  }
+
+ 
+  return () => clearInterval(countdown);
+}, [active, timer]);
+
+
+useEffect(() => {
     if (!active) return;
     if (timer === 25) triggerModel("Type your Country Name in the chat to spawn!", "un");
-    if (timer === 12) {
+    if (timer === 15) { 
       const top = Object.values(snakes).sort((a,b) => b.count - a.count);
-      if (top.length > 0) triggerModel(`Support your country ${top[0].countryCode}!`, top[0].countryCode);
+      if (top.length > 0) {
+        const code = top[0].countryCode;
+       const fullName = getFullCountryName(code);
+triggerModel(`Support your country ${fullName}!`, code);
+        triggerModel(`Support your country ${fullName}!`, code);
+      }
     }
   }, [timer, active, triggerModel, snakes]);
 
@@ -155,16 +212,15 @@ function Mode2() {
     }
   };
 
-  // --- UI RENDER (EXACTLY AS PROVIDED) ---
   return (
-    <div className="flex h-screen items-center justify-center bg-white overflow-hidden font-sans">
-      <div className="relative aspect-[9/16] h-[95vh] bg-white py-6 shadow-[0_0_50px_rgba(0,0,0,0.1)] overflow-hidden">
-        <div className="relative w-full h-full bg-[#050505] rounded-3xl overflow-hidden border-4 border-black">
+    <div className="flex h-screen items-center justify-center overflow-hidden font-sans">
+      <div className="relative aspect-[9/16] h-[100vh] shadow-[0_0_50px_rgba(0,0,0,0.1)] overflow-hidden">
+        <div className="relative w-full h-full bg-[#050505] overflow-hidde">
           {active && (
             <>
               <div className="absolute top-0 left-0 w-full h-1.5 bg-white/5 z-[60]">
                 <motion.div 
-                  className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" 
+                  className="h-full bg-gradient-to-r  from-indigo-500 via-purple-500 to-pink-500" 
                   animate={{ width: `${(timer / 30) * 100}%` }} 
                   transition={{ duration: 1, ease: "linear" }}
                 />
@@ -172,7 +228,7 @@ function Mode2() {
 
               <div className="absolute top-6 left-6 right-6 z-[700] flex justify-between items-start">
                 <div className="relative">
-                  <button onClick={() => setShowMenu(!showMenu)} className="p-2 opacity-30 text-gray-500 hover:text-white transition-all active:scale-90"> 🌎 </button>
+                  <button onClick={() => setShowMenu(!showMenu)} className="p-2 opacity-5 text-gray-500 hover:text-white transition-all active:scale-90"> 🌎 </button>
                   <AnimatePresence>
                     {showMenu && (
                       <motion.div initial={{ opacity: 0, y: -10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -10, scale: 0.95 }} className="absolute top-12 left-0 w-48 bg-[#0f0f0f] border border-white/10 rounded-2xl overflow-hidden shadow-2xl z-[800]">
@@ -209,11 +265,14 @@ function Mode2() {
                   <div className="flex flex-col">
                     <span className="text-indigo-400 font-black text-[10px] leading-tight">@{comment.username.toLowerCase()}</span>
                     <span className="text-white font-bold text-[11px] leading-tight line-clamp-1">{comment.text}</span>
+                    
                   </div>
                 </motion.div>
               ))}
             </AnimatePresence>
           </div>
+          <button onClick={() => testSpawn("User_2", "us")} className="px-4 py-2 bg-blue-600 text-white text-[10px] font-bold rounded hover:bg-blue-500 transition-all">SPAWN USER 2 (US)</button>
+//         <button onClick={() => testSpawn("User_3", "tr")} className="px-4 py-2 bg-red-600 text-white text-[10px] font-bold rounded hover:bg-red-500 transition-all">SPAWN USER 3 (TR)</button>
 
           <AnimatePresence>
             {gameModel && (
@@ -237,3 +296,4 @@ function Mode2() {
 }
 
 export default Mode2;
+

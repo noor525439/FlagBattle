@@ -65,11 +65,28 @@ const updateCountryRegex = () => {
 };
 updateCountryRegex(); 
 
+const getCountryCodeFromFlag = (emoji) => {
+    const codePoints = [...emoji].map(char => char.codePointAt(0));
+
+    if (
+        codePoints.length === 2 &&
+        codePoints.every(cp => cp >= 127462 && cp <= 127487)
+    ) {
+        return String.fromCharCode(
+            codePoints[0] - 127397,
+            codePoints[1] - 127397
+        ).toLowerCase();
+    }
+
+    return null;
+};
+
+
 const getCountryCodeFast = (name) => {
     const lowName = name.toLowerCase().trim();
     if (countryCache[lowName]) return countryCache[lowName];
 
-    // 1. Direct Search (e.g., "Pakistan")
+
     let code = countries.getAlpha2Code(name, 'en');
 
     // 2. Automatic Fix: Agar direct na mile, to saari countries mein dhoondein
@@ -81,7 +98,8 @@ const getCountryCodeFast = (name) => {
         );
     }
 
-    const finalCode = code ? code.toLowerCase() : 'pk'; // Default 'pk' agar kuch na mile
+    const finalCode = code ? code.toLowerCase() : null;
+
     countryCache[lowName] = finalCode;
     return finalCode;
 };
@@ -110,7 +128,7 @@ app.post('/set-video', async (req, res) => {
     success ? res.json({ message: "Updated", chatId: activeChatId }) : res.status(500).json({ error: "Failed" });
 });
 
-// --- CORE LOGIC: Batch Processing Sync ---
+
 const syncChatVotes = async () => {
     if (!activeChatId) return;
 
@@ -119,49 +137,71 @@ const syncChatVotes = async () => {
         if (nextPageToken) url += `&pageToken=${nextPageToken}`;
 
         const res = await axios.get(url);
-        
-        // --- YE LOGS ADD KAREIN ---
-        console.log(`🔄 Polling... Messages found: ${res.data.items?.length || 0}`);
-        
         nextPageToken = res.data.nextPageToken;
         const messages = res.data.items || [];
-        // --------------------------
 
         if (messages.length === 0) return;
 
-        let commentBatch = []; // Saray comments ek saath bhejne ke liye
+        let commentBatch = [];
 
         messages.forEach(item => {
             if (processedMessageIds.has(item.id)) return;
 
             const text = item.snippet.displayMessage;
-            console.log(`📩 Chat Message: ${text}`);
-            const match = text.match(countryRegex); // Super fast matching
+            let countryCode = null;
+            let detectedName = null;
 
-            if (match) {
-                const detectedCountry = match[0];
-                const countryCode = getCountryCodeFast(detectedCountry);
+            // 1. Detect Flag Emoji
+            const flagMatch = text.match(/[\u{1F1E6}-\u{1F1FF}]{2}/gu);
+            if (flagMatch) {
+                countryCode = getCountryCodeFromFlag(flagMatch[0]);
+                if (countryCode) {
+                    detectedName = countries.getName(countryCode.toUpperCase(), "en");
+                }
+            }
 
-                const commentData = {
+            // 2. Detect Country Name/Code from Text
+            if (!countryCode) {
+                const match = text.match(countryRegex);
+                if (match) {
+                    detectedName = match[0];
+                    countryCode = getCountryCodeFast(detectedName);
+                }
+            }
+
+            // 3. Logic for Game & UI
+            if (countryCode) {
+                // Game logic: Vote tabhi count hoga jab round active ho aur candidate list mein ho
+                if (gameState.isRoundActive && detectedName) {
+                    const originalName = gameState.candidates.find(
+                        c => c.toLowerCase() === detectedName.toLowerCase()
+                    );
+                    if (originalName) {
+                        gameState.votes[originalName] = (gameState.votes[originalName] || 0) + 1;
+                    }
+                }
+
+                // Batch for Frontend (Flags popping)
+                commentBatch.push({
                     userId: item.authorDetails.channelId,
                     username: item.authorDetails.displayName,
                     profilePic: item.authorDetails.profileImageUrl,
                     countryCode: countryCode,
-                    count: 1
-                };
-
-                commentBatch.push(commentData);
-
-                if (gameState.isRoundActive) {
-                    // Proper casing ke liye lookup
-                    const originalName = gameState.candidates.find(c => c.toLowerCase() === detectedCountry.toLowerCase());
-                    gameState.votes[originalName] = (gameState.votes[originalName] || 0) + 1;
-                }
+                    message: text
+                });
+            } else {
+                // Optional: Agar koi country match nahi hui, phir bhi animation dikhani hai
+                commentBatch.push({
+                    username: item.authorDetails.displayName,
+                    countryCode: 'un', // Globe icon fallback
+                    message: text
+                });
             }
+
             processedMessageIds.add(item.id);
         });
 
-        // Optimization: Ek hi baar batch emit karein
+        // Instant Updates to Frontend
         if (commentBatch.length > 0) {
             io.emit('newCommentsBatch', commentBatch); 
         }
@@ -170,7 +210,7 @@ const syncChatVotes = async () => {
             io.emit('voteUpdate', gameState.votes);
         }
 
-        // Keep memory clean
+        // Memory Management
         if (processedMessageIds.size > 1000) {
             processedMessageIds = new Set(Array.from(processedMessageIds).slice(-500));
         }
