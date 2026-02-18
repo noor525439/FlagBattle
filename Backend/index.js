@@ -21,14 +21,13 @@ dotenv.config();
 const app = express();
 const API_KEY = process.env.YOUTUBE_API_KEY;
 
-// --- Global Variables & Optimization Caches ---
+
 let activeChatId = null;
 let nextPageToken = null;
 let processedMessageIds = new Set();
-let countryCache = {}; // Fast lookup for country codes
-let countryRegex = null; // Optimized regex for name matching
+let countryCache = {}; 
+let countryRegex = null; 
 
-// Poori duniya ki countries ke saare possible names (Short, Official, Aliases)
 const allCountryData = countries.getNames("en"); 
 const worldCandidates = Object.values(allCountryData);
 
@@ -50,7 +49,7 @@ app.get('/', (req, res) => {
 });
 
 const updateCountryRegex = () => {
-    // Saare mulkon ke names ko sort karein (lambe naam pehle) taaki sahi matching ho
+  
     const sortedCandidates = [...gameState.candidates].sort((a, b) => b.length - a.length);
     
     const pattern = sortedCandidates
@@ -58,7 +57,7 @@ const updateCountryRegex = () => {
         .map(c => `\\b${c}\\b`)
         .join('|');
     
-    // Isme "US", "UK", "PK" bhi add kar dete hain automatically
+
     const extraPattern = `|\\bPK\\b|\\bUS\\b|\\bUK\\b|\\bIN\\b|\\bUAE\\b`;
     
     countryRegex = new RegExp(`(${pattern}${extraPattern})`, 'i');
@@ -89,12 +88,12 @@ const getCountryCodeFast = (name) => {
 
     let code = countries.getAlpha2Code(name, 'en');
 
-    // 2. Automatic Fix: Agar direct na mile, to saari countries mein dhoondein
+  
     if (!code) {
         const allNames = countries.getNames("en");
         code = Object.keys(allNames).find(key => 
             allNames[key].toLowerCase() === lowName || 
-            key.toLowerCase() === lowName // Ye "US", "PK" jaise codes ko bhi handle kar lega
+            key.toLowerCase() === lowName 
         );
     }
 
@@ -103,7 +102,7 @@ const getCountryCodeFast = (name) => {
     countryCache[lowName] = finalCode;
     return finalCode;
 };
-// --- YouTube Logic ---
+
 const getActiveChatId = async (videoId) => {
     try {
         const res = await axios.get(`https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails&id=${videoId}&key=${API_KEY}`);
@@ -151,7 +150,6 @@ const syncChatVotes = async () => {
             let countryCode = null;
             let detectedName = null;
 
-            // 1. Detect Flag Emoji
             const flagMatch = text.match(/[\u{1F1E6}-\u{1F1FF}]{2}/gu);
             if (flagMatch) {
                 countryCode = getCountryCodeFromFlag(flagMatch[0]);
@@ -160,7 +158,6 @@ const syncChatVotes = async () => {
                 }
             }
 
-            // 2. Detect Country Name/Code from Text
             if (!countryCode) {
                 const match = text.match(countryRegex);
                 if (match) {
@@ -169,9 +166,8 @@ const syncChatVotes = async () => {
                 }
             }
 
-            // 3. Logic for Game & UI
             if (countryCode) {
-                // Game logic: Vote tabhi count hoga jab round active ho aur candidate list mein ho
+           
                 if (gameState.isRoundActive && detectedName) {
                     const originalName = gameState.candidates.find(
                         c => c.toLowerCase() === detectedName.toLowerCase()
@@ -181,7 +177,7 @@ const syncChatVotes = async () => {
                     }
                 }
 
-                // Batch for Frontend (Flags popping)
+              
                 commentBatch.push({
                     userId: item.authorDetails.channelId,
                     username: item.authorDetails.displayName,
@@ -190,10 +186,10 @@ const syncChatVotes = async () => {
                     message: text
                 });
             } else {
-                // Optional: Agar koi country match nahi hui, phir bhi animation dikhani hai
+               
                 commentBatch.push({
                     username: item.authorDetails.displayName,
-                    countryCode: 'un', // Globe icon fallback
+                    countryCode: 'un', 
                     message: text
                 });
             }
@@ -201,7 +197,6 @@ const syncChatVotes = async () => {
             processedMessageIds.add(item.id);
         });
 
-        // Instant Updates to Frontend
         if (commentBatch.length > 0) {
             io.emit('newCommentsBatch', commentBatch); 
         }
@@ -210,7 +205,7 @@ const syncChatVotes = async () => {
             io.emit('voteUpdate', gameState.votes);
         }
 
-        // Memory Management
+       
         if (processedMessageIds.size > 1000) {
             processedMessageIds = new Set(Array.from(processedMessageIds).slice(-500));
         }
@@ -220,11 +215,11 @@ const syncChatVotes = async () => {
     }
 };
 
-// --- Server Setup ---
+
 const server = createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-setInterval(syncChatVotes, 3000); // Token ke saath 3s is safe
+setInterval(syncChatVotes, 3000);
 
 setInterval(() => {
     if (gameState.isRoundActive && gameState.timer > 0) {
