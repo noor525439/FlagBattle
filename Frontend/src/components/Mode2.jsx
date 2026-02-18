@@ -228,7 +228,7 @@ triggerModel(`Support your country ${fullName}!`, code);
 
               <div className="absolute top-6 left-6 right-6 z-[700] flex justify-between items-start">
                 <div className="relative">
-                  <button onClick={() => setShowMenu(!showMenu)} className="p-2 opacity-15 text-gray-500 hover:text-white transition-all active:scale-90"> 🌎 </button>
+                  <button onClick={() => setShowMenu(!showMenu)} className="p-2 opacity-10 text-gray-500 hover:text-white transition-all active:scale-90"> 🌎 </button>
                   <AnimatePresence>
                     {showMenu && (
                       <motion.div initial={{ opacity: 0, y: -10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -10, scale: 0.95 }} className="absolute top-12 left-0 w-48 bg-[#0f0f0f] border border-white/10 rounded-2xl overflow-hidden shadow-2xl z-[800]">
