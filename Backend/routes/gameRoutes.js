@@ -11,16 +11,16 @@ const __dirname = path.dirname(__filename);
 
 
 router.get('/controller-panel', (req, res) => {
-    // path.resolve use karne se path zyada accurate nikalta hai
-    const filePath = path.resolve(__dirname, '..', 'public', 'controller.html');
+    // __dirname is inside /routes, so we use '..' to go to project root, then /public
+    const filePath = path.join(__dirname, '..', 'public', 'controller.html');
     
     res.sendFile(filePath, (err) => {
         if (err) {
-            console.error("File error path:", filePath); // Render logs mein check karein ye path kya dikha raha hai
-            res.status(404).send("Controller file nahi mil rahi. Path check karein.");
+            console.error("❌ ERROR: Could not find file at:", filePath);
+            res.status(404).send("File not found on server.");
         }
     });
-});
+})
 router.get('/countries', async (req, res) => {
     try {
         const countries = await Country.find({ status: 'active' });

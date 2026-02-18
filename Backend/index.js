@@ -7,6 +7,13 @@ import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import countries from 'i18n-iso-countries';
 import enLocale from 'i18n-iso-countries/langs/en.json' with { type: 'json' };
+import path from 'path';
+import { fileURLToPath } from 'url';
+import gameRoutes from './routes/gameRoutes.js';
+
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 countries.registerLocale(enLocale);
 dotenv.config();
@@ -34,14 +41,17 @@ app.use(cors({
     credentials: true
 }));
 app.use(express.json());
+app.use('/', gameRoutes); 
+app.use(express.static(path.join(__dirname, 'public')));
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'controller.html'));
+});
 
-// --- Helper: Optimized Country Code & Regex ---
 const updateCountryRegex = () => {
-    // Candidates list se ek fast regex pattern banana
     const pattern = gameState.candidates.map(c => `\\b${c}\\b`).join('|');
     countryRegex = new RegExp(pattern, 'i');
 };
-updateCountryRegex(); // Initialize first time
+updateCountryRegex(); 
 
 const getCountryCodeFast = (name) => {
     const lowName = name.toLowerCase();
