@@ -250,7 +250,7 @@ const SnakePlayer = ({ data, snakeKey, onCollision, setSnakes, active }) => {
   }, [active, snakeKey, onCollision, setSnakes]); 
 
   return (
-   <motion.div
+    <motion.div
       id={`snake-${snakeKey}`}
       className="absolute flex flex-row-reverse items-center pointer-events-none z-40"
       style={{
@@ -260,39 +260,47 @@ const SnakePlayer = ({ data, snakeKey, onCollision, setSnakes, active }) => {
         transformOrigin: "center center",
       }}
     >
-  
-   <div className="relative z-50 flex items-center justify-center shrink-0">
-
-  <div 
-    className="absolute z-[60] whitespace-nowrap"
-    style={{ 
     
-      transform: `translate(-50%, -45px)`, 
-      left: '50%',
-      top: '50%',
-    }}
-  >
-    <span className="px-2 py-0.5 rounded-md text-[10px] font-black text-white">
-      @{data.username}
-    </span>
-  </div>
+      <div className="relative z-50 flex items-center justify-center shrink-0">
+        
+        
+        <div style={{ transform: `rotate(${-pos.angle}deg)` }}>
+          
+      
+          <div 
+            className="absolute z-[60] whitespace-nowrap"
+            style={{ 
 
- <img 
-  src={profilePic} 
-  alt={data.username} 
-  onError={(e) => {
+              transform: `translate(-50%, -45px)`, 
+              left: '50%',
+              top: '50%',
+            }}
+          >
+            <span className="px-2 py-0.5 rounded-md text-[10px] font-black text-white">
+              @{data.username}
+            </span>
+          </div>
 
-    e.target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}`;
-  }}
-  className="w-10 h-10 rounded-full border-2 border-white shadow-xl object-cover bg-slate-800 relative z-[100]" // Z-index barha diya
-  style={{ 
-    transform: `rotate(${-pos.angle}deg)`,
-    display: 'block' 
-  }}
-/>
-</div>
+        
+          <img 
+            src={profilePic} 
+            alt={data.username} 
+            key={`pfp-${snakeKey}`} 
+            onError={(e) => {
+              e.target.onerror = null;
+              e.target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}`;
+            }}
+            className="w-10 h-10 rounded-full border-2 border-white shadow-xl object-cover bg-slate-800 relative z-[100]"
+            style={{ 
+              display: 'block',
+              backfaceVisibility: 'hidden', 
+              WebkitBackfaceVisibility: 'hidden'
+            }}
+          />
+        </div>
+      </div>
 
-  
+    
       <div className="flex flex-row-reverse items-center -mr-2"> 
         {[...Array(Math.max(0, data.count))].map((_, i) => (
           <motion.img
