@@ -285,20 +285,7 @@ triggerModel(`Support your country ${fullName}!`, code);
               </motion.div>
             )}
           </AnimatePresence>
-          <button 
-    onClick={() => testSpawn("User_PK", "pk")}
-    className="bg-green-600/80 hover:bg-green-600 text-white text-[10px] px-3 py-2 rounded-full backdrop-blur-md border border-white/20 transition-all active:scale-90"
-  >
-    Test PK 🇵🇰
-  </button>
-  
-  <button 
-    onClick={() => testSpawn("User_US", "us")}
-    className="bg-blue-600/80 hover:bg-blue-600 text-white text-[10px] px-3 py-2 rounded-full backdrop-blur-md border border-white/20 transition-all active:scale-90"
-  >
-    Test US 🇺🇸
-  </button>
-
+        
           <Leaderboard snakes={snakes} />
           <BattleArena snakes={snakes} setSnakes={setSnakes} active={active} onCollision={playPopSound} />
           {!active && <EndScreen winners={Object.values(snakes).sort((a,b)=>b.count-a.count).slice(0,3)} onRestart={handleRestart} />}
