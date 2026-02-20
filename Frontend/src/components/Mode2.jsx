@@ -22,8 +22,10 @@ function Mode2() {
   const winnerAnnounced = useRef(false);
   const voiceTimeoutRef = useRef(null);
 
-  const getFlagUrl = (code) => `https://flagcdn.com/w160/${code?.toLowerCase() || 'pk'}.png`;
-
+const getFlagUrl = (code) => {
+  const finalCode = (code === 'snake' || !code) ? 'un' : code.toLowerCase();
+  return `https://flagcdn.com/w160/${finalCode}.png`;
+};
 
   const playPopSound = useCallback(() => {
     if (isMuted) return;
@@ -68,7 +70,7 @@ function Mode2() {
   const updateSnakeData = useCallback((data) => {
     if (!active) return;
     
-    const countryCode = (data.countryCode || 'un').toLowerCase();
+   let countryCode = data.countryCode ? data.countryCode.toLowerCase() : 'un';
     const userId = data.username; 
     
   
@@ -283,6 +285,19 @@ triggerModel(`Support your country ${fullName}!`, code);
               </motion.div>
             )}
           </AnimatePresence>
+          <button 
+    onClick={() => testSpawn("User_PK", "pk")}
+    className="bg-green-600/80 hover:bg-green-600 text-white text-[10px] px-3 py-2 rounded-full backdrop-blur-md border border-white/20 transition-all active:scale-90"
+  >
+    Test PK 🇵🇰
+  </button>
+  
+  <button 
+    onClick={() => testSpawn("User_US", "us")}
+    className="bg-blue-600/80 hover:bg-blue-600 text-white text-[10px] px-3 py-2 rounded-full backdrop-blur-md border border-white/20 transition-all active:scale-90"
+  >
+    Test US 🇺🇸
+  </button>
 
           <Leaderboard snakes={snakes} />
           <BattleArena snakes={snakes} setSnakes={setSnakes} active={active} onCollision={playPopSound} />

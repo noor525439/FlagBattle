@@ -65,18 +65,21 @@ app.get('/', (req, res) => {
 });
 
 const updateCountryRegex = () => {
-  
-    const sortedCandidates = [...gameState.candidates].sort((a, b) => b.length - a.length);
-    
-    const pattern = sortedCandidates
+    const allNames = Object.values(countries.getNames("en"));
+    const allCodes2 = Object.keys(countries.getAlpha2Codes());
+    const allCodes3 = Object.keys(countries.getAlpha3Codes());
+
+    // Tamam names aur codes ko ek sath join karein
+    const allPatterns = [...allNames, ...allCodes2, ...allCodes3]
+        .sort((a, b) => b.length - a.length) // Lambay words pehle (e.g., "Pakistan" before "PA")
         .map(c => c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) 
         .map(c => `\\b${c}\\b`)
         .join('|');
     
+    // Flag emojis ke liye pattern
+    const flagPattern = '[\\u{1F1E6}-\u{1F1FF}]{2}';
 
-    const extraPattern = `|\\bPK\\b|\\bUS\\b|\\bUK\\b|\\bIN\\b|\\bUAE\\b`;
-    
-    countryRegex = new RegExp(`(${pattern}${extraPattern})`, 'i');
+    countryRegex = new RegExp(`(${allPatterns}|${flagPattern})`, 'iu');
 };
 updateCountryRegex(); 
 
@@ -97,26 +100,26 @@ const getCountryCodeFromFlag = (emoji) => {
 };
 
 
-const getCountryCodeFast = (name) => {
-    const lowName = name.toLowerCase().trim();
-    if (countryCache[lowName]) return countryCache[lowName];
+const getCountryCodeFast = (input) => {
+    if (!input) return null;
+    const cleanInput = input.trim().toUpperCase();
 
-
-    let code = countries.getAlpha2Code(name, 'en');
-
-  
-    if (!code) {
-        const allNames = countries.getNames("en");
-        code = Object.keys(allNames).find(key => 
-            allNames[key].toLowerCase() === lowName || 
-            key.toLowerCase() === lowName 
-        );
+    // 1. Agar input 2 characters hai (e.g., PK)
+    if (cleanInput.length === 2 && countries.isValid(cleanInput)) {
+        return cleanInput.toLowerCase();
     }
 
-    const finalCode = code ? code.toLowerCase() : null;
+    // 2. Agar input 3 characters hai (e.g., PAK)
+    if (cleanInput.length === 3) {
+        const alpha2 = countries.alpha3ToAlpha2(cleanInput);
+        if (alpha2) return alpha2.toLowerCase();
+    }
 
-    countryCache[lowName] = finalCode;
-    return finalCode;
+    // 3. Agar Full Name hai (e.g., Pakistan)
+    const codeByName = countries.getAlpha2Code(input, 'en');
+    if (codeByName) return codeByName.toLowerCase();
+
+    return null;
 };
 
 const getActiveChatId = async (videoId) => {
@@ -166,6 +169,7 @@ const syncChatVotes = async () => {
             let countryCode = null;
             let detectedName = null;
 
+            // A. Flag Emoji check
             const flagMatch = text.match(/[\u{1F1E6}-\u{1F1FF}]{2}/gu);
             if (flagMatch) {
                 countryCode = getCountryCodeFromFlag(flagMatch[0]);
@@ -174,42 +178,38 @@ const syncChatVotes = async () => {
                 }
             }
 
+            // B. Text check (Name, PK, PAK)
             if (!countryCode) {
                 const match = text.match(countryRegex);
                 if (match) {
-                    detectedName = match[0];
-                    countryCode = getCountryCodeFast(detectedName);
+                    const matchedText = match[0];
+                    countryCode = getCountryCodeFast(matchedText);
+                    // Name nikalna voting ke liye zaroori hai
+                    detectedName = countries.getName(countryCode?.toUpperCase(), "en");
                 }
             }
 
-            if (countryCode) {
-           
-                if (gameState.isRoundActive && detectedName) {
-                    const originalName = gameState.candidates.find(
-                        c => c.toLowerCase() === detectedName.toLowerCase()
-                    );
-                    if (originalName) {
-                        gameState.votes[originalName] = (gameState.votes[originalName] || 0) + 1;
-                    }
+            // --- VOTING LOGIC START ---
+            if (gameState.isRoundActive && detectedName) {
+                // Check karein ke ye country candidates list mein hai ya nahi
+                const originalName = gameState.candidates.find(
+                    c => c.toLowerCase() === detectedName.toLowerCase()
+                );
+                if (originalName) {
+                    gameState.votes[originalName] = (gameState.votes[originalName] || 0) + 1;
                 }
-
-              
-                commentBatch.push({
-                    userId: item.authorDetails.channelId,
-                    username: item.authorDetails.displayName,
-                    profilePic: item.authorDetails.profileImageUrl,
-                    countryCode: countryCode,
-                    message: text
-                });
-            } else {
-               
-                commentBatch.push({
-                    username: item.authorDetails.displayName,
-                    countryCode: 'un', 
-                    message: text
-                });
             }
+            // --- VOTING LOGIC END ---
 
+            const response = {
+                userId: item.authorDetails.channelId,
+                username: item.authorDetails.displayName,
+                profilePic: item.authorDetails.profileImageUrl,
+                message: text,
+                countryCode: countryCode ? countryCode : 'snake'
+            };
+
+            commentBatch.push(response);
             processedMessageIds.add(item.id);
         });
 
@@ -221,7 +221,6 @@ const syncChatVotes = async () => {
             io.emit('voteUpdate', gameState.votes);
         }
 
-       
         if (processedMessageIds.size > 1000) {
             processedMessageIds = new Set(Array.from(processedMessageIds).slice(-500));
         }
