@@ -285,7 +285,7 @@ triggerModel(`Support your country ${fullName}!`, code);
               </motion.div>
             )}
           </AnimatePresence>
-        
+         
           <Leaderboard snakes={snakes} />
           <BattleArena snakes={snakes} setSnakes={setSnakes} active={active} onCollision={playPopSound} />
           {!active && <EndScreen winners={Object.values(snakes).sort((a,b)=>b.count-a.count).slice(0,3)} onRestart={handleRestart} />}
