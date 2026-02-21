@@ -9,9 +9,38 @@ const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Global variable to store current video ID (Temporary storage)
+let currentVideoId = "";
 
+router.post('/set-video', async (req, res) => {
+    try {
+        const { videoId } = req.body;
+
+        if (!videoId) {
+            return res.status(400).json({ error: "Video ID is required" });
+        }
+
+    
+        currentVideoId = videoId; 
+        
+        console.log("🚀 New Video ID Set:", currentVideoId);
+
+        res.json({ 
+            success: true, 
+            message: "Video ID updated successfully", 
+            videoId: currentVideoId 
+        });
+    } catch (err) {
+        console.error("❌ Backend Error:", err);
+        res.status(500).json({ error: "Internal Server Error: " + err.message });
+    }
+});
+
+router.get('/get-video', (req, res) => {
+    res.json({ videoId: currentVideoId });
+});
 router.get('/controller-panel', (req, res) => {
-    // __dirname is inside /routes, so we use '..' to go to project root, then /public
+
     const filePath = path.join(__dirname, '..', 'public', 'controller.html');
     
     res.sendFile(filePath, (err) => {

@@ -69,14 +69,13 @@ const updateCountryRegex = () => {
     const allCodes2 = Object.keys(countries.getAlpha2Codes());
     const allCodes3 = Object.keys(countries.getAlpha3Codes());
 
-    // Tamam names aur codes ko ek sath join karein
+    
     const allPatterns = [...allNames, ...allCodes2, ...allCodes3]
-        .sort((a, b) => b.length - a.length) // Lambay words pehle (e.g., "Pakistan" before "PA")
+        .sort((a, b) => b.length - a.length) 
         .map(c => c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) 
         .map(c => `\\b${c}\\b`)
         .join('|');
-    
-    // Flag emojis ke liye pattern
+
     const flagPattern = '[\\u{1F1E6}-\u{1F1FF}]{2}';
 
     countryRegex = new RegExp(`(${allPatterns}|${flagPattern})`, 'iu');
@@ -104,18 +103,17 @@ const getCountryCodeFast = (input) => {
     if (!input) return null;
     const cleanInput = input.trim().toUpperCase();
 
-    // 1. Agar input 2 characters hai (e.g., PK)
+
     if (cleanInput.length === 2 && countries.isValid(cleanInput)) {
         return cleanInput.toLowerCase();
     }
 
-    // 2. Agar input 3 characters hai (e.g., PAK)
     if (cleanInput.length === 3) {
         const alpha2 = countries.alpha3ToAlpha2(cleanInput);
         if (alpha2) return alpha2.toLowerCase();
     }
 
-    // 3. Agar Full Name hai (e.g., Pakistan)
+    
     const codeByName = countries.getAlpha2Code(input, 'en');
     if (codeByName) return codeByName.toLowerCase();
 
@@ -169,7 +167,7 @@ const syncChatVotes = async () => {
             let countryCode = null;
             let detectedName = null;
 
-            // A. Flag Emoji check
+    
             const flagMatch = text.match(/[\u{1F1E6}-\u{1F1FF}]{2}/gu);
             if (flagMatch) {
                 countryCode = getCountryCodeFromFlag(flagMatch[0]);
@@ -178,20 +176,20 @@ const syncChatVotes = async () => {
                 }
             }
 
-            // B. Text check (Name, PK, PAK)
+        
             if (!countryCode) {
                 const match = text.match(countryRegex);
                 if (match) {
                     const matchedText = match[0];
                     countryCode = getCountryCodeFast(matchedText);
-                    // Name nikalna voting ke liye zaroori hai
+                    
                     detectedName = countries.getName(countryCode?.toUpperCase(), "en");
                 }
             }
 
-            // --- VOTING LOGIC START ---
+            
             if (gameState.isRoundActive && detectedName) {
-                // Check karein ke ye country candidates list mein hai ya nahi
+            
                 const originalName = gameState.candidates.find(
                     c => c.toLowerCase() === detectedName.toLowerCase()
                 );
@@ -199,7 +197,7 @@ const syncChatVotes = async () => {
                     gameState.votes[originalName] = (gameState.votes[originalName] || 0) + 1;
                 }
             }
-            // --- VOTING LOGIC END ---
+
 
             const response = {
                 userId: item.authorDetails.channelId,
