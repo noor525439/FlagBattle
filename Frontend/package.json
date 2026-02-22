@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "install": "npm install --legacy-peer-deps",
+  
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
@@ -13,6 +13,7 @@
   "dependencies": {
     "@tailwindcss/vite": "^4.1.18",
     "framer-motion": "^12.34.0",
+    "i18n-iso-countries": "^7.14.0",
     "lucide-react": "^0.564.0",
     "matter-js": "^0.20.0",
     "react": "^19.2.0",

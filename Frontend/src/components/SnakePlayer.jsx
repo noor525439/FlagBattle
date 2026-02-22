@@ -158,7 +158,7 @@ import { motion } from "framer-motion";
 
 
 const SnakePlayer = ({ data, snakeKey, onCollision, setSnakes, active }) => {
-  const userId = data.userId; 
+  const userId = data.userId || data.username || 'guest';
   const flagUrl = `https://flagcdn.com/w160/${data.countryCode?.toLowerCase() || 'pk'}.png`;
   const profilePic = data.profilePic || `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}`;
 
