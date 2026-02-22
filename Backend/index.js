@@ -21,6 +21,16 @@ dotenv.config();
 const app = express();
 
 const server = createServer(app); 
+// const io = new Server(server, {
+//   cors: {
+//     origin: ["http://localhost:5173", "https://flag-battle-38g6.vercel.app"],
+//     methods: ["GET", "POST"],
+//     credentials: true
+//   },
+//   transports: ["websocket", "polling"], 
+//   pingTimeout: 60000, 
+//   pingInterval: 25000
+// });
 const io = new Server(server, {
   cors: {
     origin: ["http://localhost:5173", "https://flag-battle-38g6.vercel.app"],
@@ -28,10 +38,11 @@ const io = new Server(server, {
     credentials: true
   },
   transports: ["websocket", "polling"], 
-  pingTimeout: 60000, 
-  pingInterval: 25000
+  allowEIO3: true 
 });
 
+// Render production proxy ke liye
+app.set('trust proxy', 1);
 const API_KEY = process.env.YOUTUBE_API_KEY;
 
 
@@ -130,10 +141,12 @@ const getActiveChatId = async (videoId) => {
             console.log("SYSTEM: Live Chat Connected:", activeChatId);
             return true;
         }
+        console.log("⚠️ SYSTEM: Video ID mil gayi par Live Chat ID nahi mili. Kya stream live hai?");
         return false;
     } catch (err) {
-        console.error("ERROR: YouTube connection failed.");
+        console.error("🔥 ERROR: YouTube API detail:", err.response?.data || err.message);
         return false;
+
     }
 };
 
@@ -219,8 +232,10 @@ const syncChatVotes = async () => {
             io.emit('voteUpdate', gameState.votes);
         }
 
-        if (processedMessageIds.size > 1000) {
-            processedMessageIds = new Set(Array.from(processedMessageIds).slice(-500));
+      if (processedMessageIds.size > 2000) {
+    const idsArray = Array.from(processedMessageIds);
+    processedMessageIds = new Set(idsArray.slice(-1000));
+
         }
 
     } catch (err) {

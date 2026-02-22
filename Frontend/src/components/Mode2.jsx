@@ -68,43 +68,40 @@ const getFlagUrl = (code) => {
   }, [speak]);
 
   const updateSnakeData = useCallback((data) => {
-    if (!active) return;
-    
-   let countryCode = data.countryCode ? data.countryCode.toLowerCase() : 'un';
-    const userId = data.username; 
-    
+  if (!active) return;
   
-    const snakeKey = userId; 
+  // Backend 'snake' bhejta hai agar country na mile, usko 'un' mein convert karein
+  let countryCode = (data.countryCode && data.countryCode !== 'snake') 
+                    ? data.countryCode.toLowerCase() 
+                    : 'un';
+  
+  // Unique key ke liye username + country ka combo use karein ya Random ID
+  const snakeKey = `${data.username}-${countryCode}-${Math.random()}`; 
 
-    
+  const commentId = Math.random();
+  const newComment = { 
+    id: commentId, 
+    username: data.username,
+    text: data.message,
+    flag: countryCode,
+    profilePic: data.profilePic
+  };
 
- const commentId = Math.random();
-    const newComment = { 
-      id: commentId, 
-      username: userId,
-      text: data.message || `voted for ${getFullCountryName(countryCode)}!`,
-      flag: countryCode,
-      profilePic: data.profilePic || `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}`
-    };
+  setComments(prev => [newComment, ...prev].slice(0, 4));
+  setTimeout(() => setComments(prev => prev.filter(c => c.id !== commentId)), 4000);
 
-    setComments(prev => [newComment, ...prev].slice(0, 4)); 
-    setTimeout(() => setComments(prev => prev.filter(c => c.id !== commentId)), 4000);
+  setSnakes((prev) => ({
+    ...prev,
+    [snakeKey]: { 
+      ...data, 
+      id: snakeKey,
+      countryCode: countryCode, 
+      count: (prev[snakeKey]?.count || 0) + 1 
+    }
+  }));
 
-    setSnakes((prev) => {
-      const existing = prev[snakeKey] || { count: 0 };
-      return { 
-        ...prev, 
-        [snakeKey]: { 
-          ...data, 
-          id: snakeKey,
-          countryCode: countryCode, 
-          count: existing.count + 1 
-        } 
-      };
-    });
-
-    playPopSound();
-  }, [active, playPopSound]);
+  playPopSound();
+}, [active, playPopSound]);
 
   const testSpawn = (user, code) => {
     updateSnakeData({
