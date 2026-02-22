@@ -115,7 +115,7 @@ const getFlagUrl = (code) => {
 
   useEffect(() => {
    socketRef.current = io(SOCKET_URL, {
-    transports: ["websocket", "polling"], 
+    transports: ["polling", "websocket"], 
     reconnection: true,                   
     reconnectionAttempts: 5,              
     reconnectionDelay: 2000,              
