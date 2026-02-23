@@ -57,13 +57,18 @@
                 return;
             }
 
-            // Simple Video ID extract if they paste full URL
-            let cleanId = vid;
-            if(vid.includes('v=')) {
-                cleanId = vid.split('v=')[1].split('&')[0];
-            } else if(vid.includes('be/')) {
-                cleanId = vid.split('be/')[1].split('?')[0];
-            }
+
+             let cleanId = vid;
+             if(vid.includes('v=')) {
+                 cleanId = vid.split('v=')[1].split('&')[0];
+             } else if(vid.includes('be/')) {
+                 cleanId = vid.split('be/')[1].split('?')[0];
+             } else if(vid.includes('live/')) {
+                 cleanId = vid.split('live/')[1].split('?')[0];
+             } else if(vid.includes('/')) {
+             
+                 cleanId = vid.split('/').pop().split('?')[0];
+             }
 
             btn.innerText = "⏳ Connecting to YouTube...";
             btn.disabled = true;
