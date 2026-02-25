@@ -46,12 +46,12 @@ const Mode3 = () => {
     const [isMuted, setIsMuted] = useState(false);
     const [gameSpeed, setGameSpeed] = useState(1);
 
-    const width = 390;
-    const height = 550;
+  const width = 360; 
+    const height = 520; 
     const FLAG_RADIUS = 18;
     const CENTER_X = width / 2;
     const CENTER_Y = height / 2;
-    const ARENA_RADIUS = 140; 
+    const ARENA_RADIUS = 160;
     const audioCtx = useRef(null);
     const soundBuffers = useRef({});
 
@@ -186,11 +186,14 @@ const playSound = useCallback((name) => {
 }, [isMuted, playHitSound, playExplosionSound]);
 
 useEffect(() => {
-    if (gameState === 'COUNTDOWN' && countdown > 0) {
-        const timer = setTimeout(() => setCountdown(c => c - 1), 1000);
-        return () => clearTimeout(timer);
-    } else if (countdown === 0) {
-        setGameState('BATTLE');
+    if (gameState === 'COUNTDOWN') {
+        if (countdown > -1) {
+            const timer = setTimeout(() => setCountdown(c => c - 1), 1000);
+            return () => clearTimeout(timer);
+        } else {
+   
+            setGameState('BATTLE');
+        }
     }
 }, [countdown, gameState]);
 
@@ -301,7 +304,7 @@ const announceWinner = useCallback((countryName) => {
         window.speechSynthesis.cancel();
 
         const message = new SpeechSynthesisUtterance();
-        message.text = `Victory! ${countryName} is the winner!`;
+        message.text = `${countryName} wins!`;
         message.pitch = 1;
         message.rate = 0.9; 
         message.volume = 1;
@@ -327,93 +330,115 @@ const announceWinner = useCallback((countryName) => {
 
     useEffect(() => {
         let frame;
-        const update = () => {
-            const ctx = canvasRef.current?.getContext('2d');
-            if (!ctx) return;
-            ctx.clearRect(0, 0, width, height);
-            if (winner) return;
-            const keys = Object.keys(flagsRef.current);
+const update = () => {
+    const ctx = canvasRef.current?.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, width, height);
+    if (winner) return;
+    const keys = Object.keys(flagsRef.current);
 
-            const sorted = keys
-                .map(id => flagsRef.current[id])
-                .sort((a, b) => b.hp - a.hp)
-                .slice(0, 3);
-            setTopLives(sorted);
+    const sorted = keys
+        .map(id => flagsRef.current[id])
+        .sort((a, b) => b.hp - a.hp)
+        .slice(0, 3);
+    setTopLives(sorted);
 
-            const isCircleActive = keys.length <= 3 && keys.length > 0;
-            if (isCircleActive) {
-                ctx.beginPath(); ctx.arc(CENTER_X, CENTER_Y, ARENA_RADIUS, 0, Math.PI * 2);
-                ctx.strokeStyle = 'red'; ctx.lineWidth = 4; ctx.stroke();
-            }
-            if (keys.length === 1 && gameState === 'BATTLE') {
-                setWinner(flagsRef.current[keys[0]]);
-                setTimeout(resetGame, 3000);
-                return;
-            }
-            keys.forEach((id, index) => {
-                const f = flagsRef.current[id];
-                if (!f) return;
-                if (gameState === 'BATTLE') {
-                    f.x += (f.vx * speedRef.current); f.y += (f.vy * speedRef.current);
-                    if (isCircleActive) {
-                        const dx = f.x - CENTER_X; const dy = f.y - CENTER_Y;
-                        const dist = Math.sqrt(dx*dx + dy*dy);
-                        if (dist > ARENA_RADIUS - f.radius) {
-                            const angle = Math.atan2(dy, dx);
-                            f.vx = -Math.cos(angle) * Math.abs(f.vx);
-                            f.vy = -Math.sin(angle) * Math.abs(f.vy);
-                            f.x = CENTER_X + (ARENA_RADIUS - f.radius) * Math.cos(angle);
-                            f.y = CENTER_Y + (ARENA_RADIUS - f.radius) * Math.sin(angle);
-                        }
-                    } else {
-                        if (f.x < f.radius || f.x > width - f.radius) f.vx *= -1;
-                        if (f.y < f.radius || f.y > height - f.radius) f.vy *= -1;
-                    }
-                }
-
-for (let j = index + 1; j < keys.length; j++) {
-    const o = flagsRef.current[keys[j]];
-    if (!o) continue;
-    
-    const dx = o.x - f.x;
-    const dy = o.y - f.y;
-    const distance = Math.hypot(dx, dy);
-    const minDistance = f.radius + o.radius;
-
-    if (distance < minDistance) {
-        playSound('hit');
-
-        
-        const overlap = minDistance - distance;
-        const nx = dx / distance;
-        const ny = dy / distance;
-        f.x -= nx * (overlap / 2);
-        f.y -= ny * (overlap / 2);
-        o.x += nx * (overlap / 2);
-        o.y += ny * (overlap / 2);
-
-
-        [f.vx, o.vx] = [o.vx, f.vx]; 
-        [f.vy, o.vy] = [o.vy, f.vy];
-        
-        f.hp -= 15; o.hp -= 15;
+    const isCircleActive = keys.length <= 3 && keys.length > 0;
+    if (isCircleActive) {
+        ctx.beginPath(); ctx.arc(CENTER_X, CENTER_Y, ARENA_RADIUS, 0, Math.PI * 2);
+        ctx.strokeStyle = 'red'; ctx.lineWidth = 4; ctx.stroke();
     }
-}
-                f.rotation += 0.15;
-                ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.rotation);
-                ctx.fillStyle = '#fff'; ctx.fillRect(10, -1.5, 25, 3); ctx.restore();
-                ctx.save(); ctx.beginPath(); ctx.arc(f.x, f.y, f.radius, 0, Math.PI * 2); ctx.clip();
-                const img = new Image(); img.src = f.img;
-                ctx.drawImage(img, f.x - f.radius, f.y - f.radius, f.radius * 2, f.radius * 2); ctx.restore();
-                ctx.fillStyle = f.hp > 50 ? '#22c55e' : '#ef4444';
-                ctx.fillRect(f.x - 15, f.y - 25, (Math.max(0, Math.min(f.hp, 100)) / 100) * 30, 3);
-                ctx.fillStyle = "white"; ctx.font = "bold 10px Arial"; ctx.textAlign = "center";
-                const displayName = getFullCountryName(f.id);
-ctx.fillText(displayName, f.x, f.y + 35);
-                if (f.hp <= 0) delete flagsRef.current[id];
-            });
-            frame = requestAnimationFrame(update);
-        };
+    if (keys.length === 1 && gameState === 'BATTLE') {
+        setWinner(flagsRef.current[keys[0]]);
+        setTimeout(resetGame, 3000);
+        return;
+    }
+    keys.forEach((id, index) => {
+        const f = flagsRef.current[id];
+        if (!f) return;
+        if (gameState === 'BATTLE') {
+            f.x += (f.vx * speedRef.current); f.y += (f.vy * speedRef.current);
+            if (isCircleActive) {
+                const dx = f.x - CENTER_X; const dy = f.y - CENTER_Y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                if (dist > ARENA_RADIUS - f.radius) {
+                    const angle = Math.atan2(dy, dx);
+                    f.vx = -Math.cos(angle) * Math.abs(f.vx);
+                    f.vy = -Math.sin(angle) * Math.abs(f.vy);
+                    f.x = CENTER_X + (ARENA_RADIUS - f.radius) * Math.cos(angle);
+                    f.y = CENTER_Y + (ARENA_RADIUS - f.radius) * Math.sin(angle);
+                }
+            } else {
+                if (f.x < f.radius || f.x > width - f.radius) f.vx *= -1;
+                if (f.y < f.radius || f.y > height - f.radius) f.vy *= -1;
+            }
+        }
+
+        for (let j = index + 1; j < keys.length; j++) {
+            const o = flagsRef.current[keys[j]];
+            if (!o) continue;
+            
+            const dx = o.x - f.x;
+            const dy = o.y - f.y;
+            const distance = Math.hypot(dx, dy);
+            const minDistance = f.radius + o.radius;
+
+            if (distance < minDistance) {
+                playSound('hit');
+                const overlap = minDistance - distance;
+                const nx = dx / distance;
+                const ny = dy / distance;
+                f.x -= nx * (overlap / 2);
+                f.y -= ny * (overlap / 2);
+                o.x += nx * (overlap / 2);
+                o.y += ny * (overlap / 2);
+                [f.vx, o.vx] = [o.vx, f.vx]; 
+                [f.vy, o.vy] = [o.vy, f.vy];
+                f.hp -= 15; o.hp -= 15;
+            }
+        }
+
+        f.rotation += 0.15; 
+
+        ctx.save();
+     
+        ctx.translate(f.x, f.y); 
+        
+        ctx.rotate(f.rotation); 
+        
+        ctx.font = "28px serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+
+        ctx.save();
+     
+        ctx.scale(-1, 1); 
+        
+    
+        ctx.rotate(Math.PI / 4); 
+
+       
+        ctx.fillText("🗡️", -35, 0); 
+        
+        ctx.restore();
+        ctx.restore();
+
+       
+        ctx.save(); ctx.beginPath(); ctx.arc(f.x, f.y, f.radius, 0, Math.PI * 2); ctx.clip();
+        const img = new Image(); img.src = f.img;
+        ctx.drawImage(img, f.x - f.radius, f.y - f.radius, f.radius * 2, f.radius * 2); ctx.restore();
+
+        ctx.fillStyle = f.hp > 50 ? '#22c55e' : '#ef4444';
+        ctx.fillRect(f.x - 15, f.y - 25, (Math.max(0, Math.min(f.hp, 100)) / 100) * 30, 3);
+        
+        ctx.fillStyle = "white"; ctx.font = "bold 10px Arial"; ctx.textAlign = "center";
+        const displayName = getFullCountryName(f.id);
+        ctx.fillText(displayName, f.x, f.y + 35);
+        
+        if (f.hp <= 0) delete flagsRef.current[id];
+    });
+    frame = requestAnimationFrame(update);
+};
         update();
         return () => cancelAnimationFrame(frame);
     }, [gameState, winner, resetGame, playSound]);
@@ -495,11 +520,18 @@ ctx.fillText(displayName, f.x, f.y + 35);
             </AnimatePresence>
 
        
-            {gameState === 'COUNTDOWN' && (
-                <div className="absolute inset-0 z-[900] flex items-center justify-center bg-black/60">
-                    <h1 className="text-white text-9xl font-black italic">{countdown}</h1>
-                </div>
-            )}
+ {gameState === 'COUNTDOWN' && (
+    <div className="absolute inset-0 z-[900] flex items-center justify-center bg-black/60">
+        <h1 
+            key={countdown} 
+            className={`text-white font-black italic animate-bounce transition-all duration-300 ${
+                countdown === 0 ? 'text-[10rem]' : 'text-[11rem]'
+            }`}
+        >
+            {countdown > 0 ? countdown : 'GO!'}
+        </h1>
+    </div>
+)}
 
             <div className="absolute top-6 left-6 right-6 z-[700] flex justify-between items-start">
                 <div className="relative">
